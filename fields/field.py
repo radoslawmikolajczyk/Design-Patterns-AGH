@@ -24,3 +24,21 @@ class Column(Field):
         self.nullable = nullable
         self.unique = unique
         self.name = name
+
+class PrimaryKey(Field):
+    """
+        A class to represent a PRIMARY KEY column in a database table
+
+        Attributes
+        -----------------
+        column_type : StoreType
+        name : String
+
+        Methods
+        -----------------
+        __init__(self, column_type, name="DEFAULT"):
+            initializes object with the given attributes
+    """
+    def __init__(self, column_type, name="DEFAULT"):
+        self.type = column_type
+        self.name = name
