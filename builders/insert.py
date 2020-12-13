@@ -1,6 +1,7 @@
 from typing import Union, Dict
 
 from builders.stringutils import quote_database_object_name_unsafe
+from fields.storetype import StoreType
 
 
 class InsertBuilder:
@@ -15,8 +16,8 @@ class InsertBuilder:
         self.__table = table
         return self
 
-    def add(self, field: str, string: str) -> 'InsertBuilder':
-        self.__fields[field] = string
+    def add(self, field: str, typ: StoreType, data) -> 'InsertBuilder':
+        self.__fields[field] = typ.serialize(data)
         return self
 
     def is_empty(self) -> bool:
