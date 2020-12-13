@@ -1,7 +1,7 @@
 from typing import Union, Tuple, Dict
 
 from builders.stringutils import quote_database_object_name_unsafe
-
+from fields.storetype import StoreType
 
 class UpdateBuilder:
     __where: Union[Tuple[str, str], None]
@@ -17,12 +17,12 @@ class UpdateBuilder:
         self.__table = table
         return self
 
-    def add(self, field: str, string: str) -> 'UpdateBuilder':
-        self.__fields[field] = string
+    def add(self, field: str, typ: StoreType, data) -> 'InsertBuilder':
+        self.__fields[field] = typ.serialize(data)
         return self
 
-    def where(self, field: str, string: str) -> 'UpdateBuilder':
-        self.__where = (field, string)
+    def where(self, field: str, typ: StoreType, data) -> 'UpdateBuilder':
+        self.__where = (field, typ.serialize(data))
         return self
 
     def is_empty(self) -> bool:
