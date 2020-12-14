@@ -1,3 +1,6 @@
+import builders.stringutils as strutl
+import datetime
+
 class StoreType:
     """
         A class to represent a type of column in a database table
@@ -21,10 +24,13 @@ class StoreType:
         self.nullable = False
 
     def parse(self):
-        pass
+        raise NotImplemented()
+
+    def serialize(self, data):
+        raise NotImplemented()
 
     def definition(self):
-        pass
+        raise NotImplemented()
 
 
 class Text(StoreType):
@@ -34,6 +40,12 @@ class Text(StoreType):
         self.max_length = max_length
         self.char_set = char_set
 
+    def serialize(self, data):
+        assert type(data) is str
+        assert len(data) <= self.max_length
+        return strutl.quote_string(data)
+
+
 
 class TimeStamp(StoreType):
 
@@ -41,11 +53,23 @@ class TimeStamp(StoreType):
         super().__init__()
         self.with_zone = with_zone
 
+    def serialize(self, data):
+        assert type(data) is datetime.datetime
+
+        if self.with_zone:
+            return f"TIMESTAMP WITH TIME ZONE '{data.strftime('%Y-%m-%d %H:%M:%S%z')}'"
+        else:
+            return f"TIMESTAMP '{data.astimezone(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}'"
+
 
 class Integer(StoreType):
 
     def __init__(self):
         super().__init__()
+
+    def serialize(self, data):
+        assert type(data) is int
+        return str(data)
 
 
 class Float(StoreType):
@@ -53,8 +77,19 @@ class Float(StoreType):
     def __init__(self):
         super().__init__()
 
+    def serialize(self, data):
+        assert type(data) is float
+        return str(data)
+
 
 class Boolean(StoreType):
 
     def __init__(self):
         super().__init__()
+
+    def serialize(self, data):
+        assert type(data) is bool
+        if data:
+            return "TRUE"
+        else:
+            return "FALSE"
