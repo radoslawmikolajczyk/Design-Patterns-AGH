@@ -35,7 +35,7 @@ class StoreType:
 
 class Text(StoreType):
 
-    def __init__(self, max_length=255, char_set="UTF-8"):
+    def __init__(self, max_length=255, char_set="utf8"):
         super().__init__()
         self.max_length = max_length
         self.char_set = char_set
@@ -44,6 +44,9 @@ class Text(StoreType):
         assert type(data) is str
         assert len(data) <= self.max_length
         return strutl.quote_string(data)
+
+    def definition(self):
+        return f"VARCHAR({self.max_length})" #CHARACTER SET {self.char_set}
 
 
 
@@ -61,6 +64,9 @@ class TimeStamp(StoreType):
         else:
             return f"TIMESTAMP '{data.astimezone(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}'"
 
+    def definition(self):
+        return "TIMESTAMP" if not self.with_zone else "TIMESTAMP WITH TIME ZONE"
+
 
 class Integer(StoreType):
 
@@ -71,6 +77,9 @@ class Integer(StoreType):
         assert type(data) is int
         return str(data)
 
+    def definition(self):
+        return "INTEGER"
+
 
 class Float(StoreType):
 
@@ -80,6 +89,9 @@ class Float(StoreType):
     def serialize(self, data):
         assert type(data) is float
         return str(data)
+
+    def definition(self):
+        return "NUMERIC"
 
 
 class Boolean(StoreType):
@@ -93,3 +105,6 @@ class Boolean(StoreType):
             return "TRUE"
         else:
             return "FALSE"
+
+    def definition(self):
+        return "BOOLEAN"
