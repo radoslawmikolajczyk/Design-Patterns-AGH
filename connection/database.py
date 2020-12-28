@@ -15,6 +15,9 @@ class SingletonMeta(type):
 
 class DatabaseConnection(metaclass=SingletonMeta):
 
+    def __init__(self):
+        self.is_connected = False
+
     def configure(self, conf: ConnectionConfiguration):
         self.__configuration = conf
 
@@ -37,11 +40,14 @@ class DatabaseConnection(metaclass=SingletonMeta):
                 port=self.__configuration.port,
                 database=self.__configuration.database
             )
+            self.is_connected = True
         except Exception as error:
             print("Error while connecting to PostgreSQL", error)
 
     def close(self):
-        if self.connection:
+        if self.is_connected:
             self.cursor.close()
             self.connection.close()
             print("PostgreSQL connection is closed")
+        else:
+            print("There is no connection to database")
