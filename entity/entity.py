@@ -14,6 +14,3 @@ class Entity:
 
     def __init__(self, name):
         self._table_name = name
-
-    def get_table_name(self):
-        return self._table_name

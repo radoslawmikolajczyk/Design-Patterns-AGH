@@ -2,6 +2,8 @@ from connection.configuration import ConnectionConfiguration
 from connection.database import DatabaseConnection
 from entity.entity import Entity
 import gc
+import inspect
+from collections import defaultdict
 from fields import field
 from fields import storetype
 
@@ -21,7 +23,7 @@ class Manager(metaclass=SingletonMeta):
     def __init__(self):
         self.__database_connection = DatabaseConnection()
         # get all table names from all classes which inherit from Entity
-        self.__tables = self.__get_all_subclasses(Entity)
+        self.__tables = self.__get_all_instances(Entity)
         print(self.__tables)
         self.__fields = []
 
@@ -47,29 +49,36 @@ class Manager(metaclass=SingletonMeta):
     def select(self, model, query: str) -> list:
         return []
 
-    def __get_all_subclasses(self, cls):
-        all_subclasses = []
+    def __get_all_instances(self, cls):
+        table_names = []
         for subclass in cls.__subclasses__():
             for obj in gc.get_objects():
                 if isinstance(obj, subclass):
-                    all_subclasses.append(obj.get_table_name())
-        return all_subclasses
+                    attr = inspect.getmembers(obj, lambda a: not (inspect.isroutine(a)))
+                    print([a for a in attr if not (a[0].startswith('__') and a[0].endswith('__'))])
+                    attr_list = [a for a in attr if not (a[0].startswith('__') and a[0].endswith('__'))]
+                    dictionary = defaultdict(list)
+                    for i, j in attr_list:
+                        dictionary[i].append(j)
+                    print(dict(dictionary))
+                    table_names.append(dict(dictionary).get('_table_name')[0])
+        return table_names
 
 class Person(Entity):
     first_name = field.Column(storetype.Text(max_length=30), name="first_name")
     def __init__(self, name):
         super().__init__(name)
 
-class Pig(Entity):
+class Address(Entity):
     def __init__(self, name):
         super().__init__(name)
 
-class Pig2(Pig):
+class City(Address):
     def __init__(self, name):
         super().__init__(name)
 
 p = Person('people')
-print(p.first_name.name)
-p1 = Pig('ppp')
-p2 = Pig2('ososo')
+print(p.first_name.type.max_length)
+p1 = Address('ppp')
+p2 = City('ososo')
 m = Manager()
