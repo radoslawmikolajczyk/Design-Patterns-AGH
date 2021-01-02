@@ -1,5 +1,6 @@
 from builders.delete import DeleteBuilder
 from builders.insert import InsertBuilder
+from builders.update import UpdateBuilder
 from connection.configuration import ConnectionConfiguration
 from connection.database import DatabaseConnection
 from entity.entity import Entity
@@ -48,6 +49,7 @@ class Manager(metaclass=SingletonMeta):
             store_type = columns[column_name]
             value = getattr(entity, column_name)
             builder.add(column_name, store_type, value)
+
         query = builder.build()
         self.__database_connection.execute(query)
 
@@ -61,11 +63,30 @@ class Manager(metaclass=SingletonMeta):
 
         builder = DeleteBuilder().table(table_name)
         builder.where(primary_key_name, store_type, value)
+
         query = builder.build()
         self.__database_connection.execute(query)
 
     def update(self, entity: Entity):
-        pass
+        # TODO: - find the exact name of the table
+        #       - find the columns (name, type) of the table
+        #       - find the primary key (name, type) of the table
+        table_name = str(type(entity))
+        columns = dict()  # Dict[str, StoreType]
+
+        builder = UpdateBuilder().table(table_name)
+        for column_name in columns:
+            store_type = columns[column_name]
+            value = getattr(entity, column_name)
+            builder.add(column_name, store_type, value)
+
+        primary_key = ('', StoreType())  # Tuple[str, str]
+        primary_key_name, store_type = primary_key
+        value = getattr(entity, primary_key_name)
+        builder.where(primary_key_name, store_type, value)
+
+        query = builder.build()
+        self.__database_connection.execute(query)
 
     def findById(self, model, id):
         pass
