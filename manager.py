@@ -1,3 +1,4 @@
+from builders.delete import DeleteBuilder
 from builders.insert import InsertBuilder
 from connection.configuration import ConnectionConfiguration
 from connection.database import DatabaseConnection
@@ -7,6 +8,7 @@ import inspect
 from collections import defaultdict
 from fields import field
 from fields import storetype
+from fields.storetype import StoreType
 
 
 class SingletonMeta(type):
@@ -40,6 +42,7 @@ class Manager(metaclass=SingletonMeta):
         #       - find the columns (name, type) of the table
         table_name = str(type(entity))
         columns = dict()  # Dict[str, StoreType]
+
         builder = InsertBuilder().into(table_name)
         for column_name in columns:
             store_type = columns[column_name]
@@ -49,7 +52,17 @@ class Manager(metaclass=SingletonMeta):
         self.__database_connection.execute(query)
 
     def delete(self, entity: Entity):
-        pass
+        # TODO: - find the exact name of the table
+        #       - find the primary key (name, type) of the table
+        table_name = str(type(entity))
+        primary_key = ('', StoreType())  # Tuple[str, str]
+        primary_key_name, store_type = primary_key
+        value = getattr(entity, primary_key_name)
+
+        builder = DeleteBuilder().table(table_name)
+        builder.where(primary_key_name, store_type, value)
+        query = builder.build()
+        self.__database_connection.execute(query)
 
     def update(self, entity: Entity):
         pass
