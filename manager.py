@@ -1,3 +1,4 @@
+from builders.insert import InsertBuilder
 from connection.configuration import ConnectionConfiguration
 from connection.database import DatabaseConnection
 from entity.entity import Entity
@@ -35,7 +36,17 @@ class Manager(metaclass=SingletonMeta):
         self.__database_connection.close()
 
     def insert(self, entity: Entity):
-        pass
+        # TODO: - find the exact name of the table
+        #       - find the columns (name, type) of the table
+        table_name = str(type(entity))
+        columns = dict()  # Dict[str, StoreType]
+        builder = InsertBuilder().into(table_name)
+        for column_name in columns:
+            store_type = columns[column_name]
+            value = getattr(entity, column_name)
+            builder.add(column_name, store_type, value)
+        query = builder.build()
+        self.__database_connection.execute(query)
 
     def delete(self, entity: Entity):
         pass
@@ -64,18 +75,23 @@ class Manager(metaclass=SingletonMeta):
                     table_names.append(dict(dictionary).get('_table_name')[0])
         return table_names
 
+
 class Person(Entity):
     first_name = field.Column(storetype.Text(max_length=30), name="first_name")
+
     def __init__(self, name):
         super().__init__(name)
+
 
 class Address(Entity):
     def __init__(self, name):
         super().__init__(name)
 
+
 class City(Address):
     def __init__(self, name):
         super().__init__(name)
+
 
 p = Person('people')
 print(p.first_name.type.max_length)
