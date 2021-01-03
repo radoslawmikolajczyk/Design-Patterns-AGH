@@ -33,6 +33,7 @@ class Manager(metaclass=SingletonMeta):
         print(self.__all_data)
 
     def create_tables(self):
+        # Do rozwiniecia o nowe rzeczy w ddl builder unique, not null etc..
         if self.__is_connected:
             for i in range(len(self.__all_data)):
                 builder = ddl.DDLBuilder()
@@ -48,9 +49,10 @@ class Manager(metaclass=SingletonMeta):
                     if type(value).__name__ == 'PrimaryKey':
                         builder.field(value.name, value.type)
                         builder.primary_key(value.name)
-                self.__database_connection.execute(builder.build())
+                self.__database_connection.commit(builder.build(), 'CREATE TABLE')
         else:
             print("CREATE A CONNECTION TO DATABASE!")
+        self.close()
 
     def connect(self, conf: ConnectionConfiguration):
         self.__database_connection.configure(conf)
@@ -74,7 +76,7 @@ class Manager(metaclass=SingletonMeta):
             builder.add(column_name, store_type, value)
 
         query = builder.build()
-        self.__database_connection.execute(query)
+        self.__database_connection.commit(query)
 
     def delete(self, entity: Entity):
         # TODO: - find the exact name of the table
@@ -88,7 +90,7 @@ class Manager(metaclass=SingletonMeta):
         builder.where(primary_key_name, store_type, value)
 
         query = builder.build()
-        self.__database_connection.execute(query)
+        self.__database_connection.commit(query)
 
     def update(self, entity: Entity):
         # TODO: - find the exact name of the table
@@ -109,7 +111,7 @@ class Manager(metaclass=SingletonMeta):
         builder.where(primary_key_name, store_type, value)
 
         query = builder.build()
-        self.__database_connection.execute(query)
+        self.__database_connection.commit(query)
 
     def find_by_id(self, model, id):
         pass
@@ -156,37 +158,3 @@ class Manager(metaclass=SingletonMeta):
 
                     table_names.append(dictionary.get('_table_name')[0])
         return table_names, tables
-
-
-class Person(Entity):
-    first_name = field.Column(storetype.Text(max_length=30), name="first_name")
-    second_name = field.Column(storetype.Text(max_length=80), name="second_name")
-
-    def __init__(self, name):
-        super().__init__(name)
-
-
-class Address(Entity):
-
-    xd = field.Column(storetype.Text(max_length=30), name="xd")
-
-    def __init__(self, name):
-        super().__init__(name)
-
-
-class City(Address):
-    id = field.PrimaryKey(storetype.Integer(), name='id')
-
-    def __init__(self, name):
-        super().__init__(name)
-
-
-p = Person('people')
-p1 = Address('address')
-p2 = City('city')
-m = Manager()
-conf = ConnectionConfiguration(user="postgres",
-                                   password="rajka1001",
-                                   database="postgres")
-m.connect(conf)
-m.create_tables()

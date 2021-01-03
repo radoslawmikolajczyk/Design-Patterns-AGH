@@ -103,5 +103,5 @@ class DDLBuilder:
 
         fields = ', '.join([c.build() for c in [*self.__fields, self.__primary_key, *self.__constraints]])
 
-        return f"CREATE TABLE {self.__name} ({fields})"
+        return f"CREATE TABLE IF NOT EXISTS {self.__name} ({fields})"
 

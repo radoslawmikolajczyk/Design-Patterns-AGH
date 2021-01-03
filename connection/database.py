@@ -26,11 +26,19 @@ class DatabaseConnection(metaclass=SingletonMeta):
         try:
             self.cursor = self.connection.cursor()
             self.cursor.execute(query)
-            self.connection.commit()
             result.change_query(self.cursor.fetchall())
         except Exception as error:
-            print("Error while executing to database: ", error)
+            print("Error while querying to database: ", error)
         return result
+
+    def commit(self, query: str, query_type: str = 'QUERY'):
+        try:
+            self.cursor = self.connection.cursor()
+            self.cursor.execute(query)
+            self.connection.commit()
+            print(query_type, ' was successful: ', query)
+        except Exception as error:
+            print("Error while executing to database: ", error)
 
     def connect(self):
         try:
