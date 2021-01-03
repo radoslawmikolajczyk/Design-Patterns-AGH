@@ -4,32 +4,76 @@ from builders.stringutils import quote_database_object_name_unsafe, generate_esc
 from fields.storetype import StoreType
 
 
+class DDLBuildable:
+
+    def build(self):
+        raise NotImplementedError()
+
+
+class DDLForeignKeyBuildable(DDLBuildable):
+    __name: str
+    __other_table: str
+    __other_name: str
+
+    def __init__(self, name: str, other_table: str, other_name: str):
+        self.__name = quote_database_object_name_unsafe(name)
+        self.__other_table = quote_database_object_name_unsafe(other_table)
+        self.__other_name = quote_database_object_name_unsafe(other_name)
+
+    def build(self):
+        return f"CONSTRAINT fk_{generate_escape_seq()} FOREIGN KEY({self.__name}) REFERENCES {self.__other_table}({self.__other_name})"
+
+
+class DDLUniqueBuildable(DDLBuildable):
+    __name: str
+
+    def __init__(self, name: str):
+        self.__name = quote_database_object_name_unsafe(name)
+
+    def build(self):
+        return f"CONSTRAINT uk_{generate_escape_seq()} UNIQUE ({self.__name})"
+
+
+class DDLPrimaryKeyBuildable(DDLBuildable):
+    __name: str
+
+    def __init__(self, name: str):
+        self.__name = quote_database_object_name_unsafe(name)
+
+    def build(self):
+        return f"PRIMARY KEY({self.__name})"
+
+
 class DDLBuilder:
     __name: Union[str, None]
     __fields: List[Tuple[str, StoreType]]
-    __primary_key: Union[str, None]
-    __foreign_keys: List[Tuple[str, Tuple[str, str]]]
+    __constraints: List[DDLBuildable]
+    __primary_key: Union[DDLPrimaryKeyBuildable, None]
 
     def __init__(self):
         self.__name = None
         self.__fields = []
-        self.__foreign_keys = []
+        self.__constraints = []
         self.__primary_key = None
 
     def name(self, name: str) -> 'DDLBuilder':
         self.__name = name
         return self
 
-    def field(self, name: str, stype: StoreType) -> 'DDLBuilder':
-        self.__fields.append((name, stype))
+    def field(self, name: str, stype: StoreType, nullable: bool = True) -> 'DDLBuilder':
+        self.__fields.append(DDLField(name, stype, nullable))
         return self
 
     def primary_key(self, name: str) -> 'DDLBuilder':
-        self.__primary_key = name
+        self.__primary_key = DDLPrimaryKeyBuildable(name)
         return self
 
-    def foreign_keys(self, name: str, table: str, other_name: str) -> 'DDLBuilder':
-        self.__foreign_keys.append((name, (other_name, table)))
+    def foreign_key(self, name: str, other_table: str, other_name: str) -> 'DDLBuilder':
+        self.__constraints.append(DDLForeignKeyBuildable(name, other_table, other_name))
+        return self
+
+    def unique(self, name: str) -> 'DDLBuilder':
+        self.__constraints.append(DDLUniqueBuildable(name))
         return self
 
     def is_empty(self) -> bool:
@@ -41,8 +85,6 @@ class DDLBuilder:
         assert self.__primary_key is not None
         fields = ', '.join(
             [f"{quote_database_object_name_unsafe(nam)} {typ.definition()}" for (nam, typ) in self.__fields])
-        f_keys = ', '.join([
-            f"CONSTRAINT fk_{generate_escape_seq()} FOREIGN KEY({quote_database_object_name_unsafe(loc)}) REFERENCES {quote_database_object_name_unsafe(other)}({quote_database_object_name_unsafe(nam)})"
-            for loc, (nam, other) in self.__foreign_keys])
-        print(len(f_keys))
-        return f"CREATE TABLE {quote_database_object_name_unsafe(self.__name)} ({fields}, PRIMARY KEY({quote_database_object_name_unsafe(self.__primary_key)}){', ' if len(f_keys) > 0 else ''}{f_keys})"
+        f_keys = ', '.join([c.build() for c in [self.__primary_key, *self.__constraints]])
+
+        return f"CREATE TABLE {quote_database_object_name_unsafe(self.__name)} ({fields}, {f_keys})"
