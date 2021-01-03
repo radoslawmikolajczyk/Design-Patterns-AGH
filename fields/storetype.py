@@ -21,7 +21,6 @@ class StoreType:
     def __init__(self):
         self._python_type = ""
         self._database_type = ""
-        self.nullable = False
 
     def parse(self):
         raise NotImplemented()

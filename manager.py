@@ -10,6 +10,7 @@ from collections import defaultdict
 from fields import field
 from fields import storetype
 from fields.storetype import StoreType
+import builders.ddl as ddl
 
 
 class SingletonMeta(type):
@@ -25,18 +26,40 @@ class SingletonMeta(type):
 class Manager(metaclass=SingletonMeta):
 
     def __init__(self):
+        self.__is_connected = False
         self.__database_connection = DatabaseConnection()
         # get all table names from all classes which inherit from Entity
-        self.__tables = self.__get_all_instances(Entity)
-        print(self.__tables)
-        self.__fields = []
+        self.__tables, self.__all_data = self.__get_all_instances(Entity)
+        print(self.__all_data)
+
+    def create_tables(self):
+        if self.__is_connected:
+            for i in range(len(self.__all_data)):
+                builder = ddl.DDLBuilder()
+                has_primary_key = False
+                name = self.__all_data[i].get('_table_name')
+                builder.name(name)
+                for key, value in self.__all_data[i].items():
+                    if type(value).__name__ == 'Column':
+                        builder.field(value.name, value.type)
+                        if not has_primary_key:
+                            builder.primary_key(value.name)
+                            has_primary_key = True
+                    if type(value).__name__ == 'PrimaryKey':
+                        builder.field(value.name, value.type)
+                        builder.primary_key(value.name)
+                self.__database_connection.execute(builder.build())
+        else:
+            print("CREATE A CONNECTION TO DATABASE!")
 
     def connect(self, conf: ConnectionConfiguration):
         self.__database_connection.configure(conf)
         self.__database_connection.connect()
+        self.__is_connected = True
 
     def close(self):
         self.__database_connection.close()
+        self.__is_connected = False
 
     def insert(self, entity: Entity):
         # TODO: - find the exact name of the table
@@ -88,7 +111,7 @@ class Manager(metaclass=SingletonMeta):
         query = builder.build()
         self.__database_connection.execute(query)
 
-    def findById(self, model, id):
+    def find_by_id(self, model, id):
         pass
 
     def select(self, model, query: str) -> list:
@@ -96,39 +119,74 @@ class Manager(metaclass=SingletonMeta):
 
     def __get_all_instances(self, cls):
         table_names = []
+        tables = []
         for subclass in cls.__subclasses__():
             for obj in gc.get_objects():
+                entire_table = {}
                 if isinstance(obj, subclass):
                     attr = inspect.getmembers(obj, lambda a: not (inspect.isroutine(a)))
-                    print([a for a in attr if not (a[0].startswith('__') and a[0].endswith('__'))])
                     attr_list = [a for a in attr if not (a[0].startswith('__') and a[0].endswith('__'))]
                     dictionary = defaultdict(list)
                     for i, j in attr_list:
                         dictionary[i].append(j)
                     dictionary = dict(dictionary)
+
+                    for key, value in dictionary.items():
+
+                        # print(key, " -> ", type(value[0]).__name__)
+                        if key == '_table_name':
+                            entire_table[key] = value[0]
+                        else:
+                            entire_table[key] = value[0]
+                            '''column_params = value[0].__dict__
+                            column_dict = {}
+                            for k, v in column_params.items():
+                                if k == 'type':
+                                    type_dict = {key: value[0]}
+                                    type_data = {'StoreType': v.__class__.__name__}
+                                    for k1, v1 in v.__dict__.items():
+                                        type_data[k1] = v1
+                                    type_dict['type_params'] = type_data
+                                    column_dict[k] = type_dict
+                                else:
+                                    column_dict[k] = v
+                            entire_table[key] = column_dict
+                            #print(column_dict)'''
+                    tables.append(entire_table)
+
                     table_names.append(dictionary.get('_table_name')[0])
-        return table_names
+        return table_names, tables
 
 
 class Person(Entity):
     first_name = field.Column(storetype.Text(max_length=30), name="first_name")
+    second_name = field.Column(storetype.Text(max_length=80), name="second_name")
 
     def __init__(self, name):
         super().__init__(name)
 
 
 class Address(Entity):
+
+    xd = field.Column(storetype.Text(max_length=30), name="xd")
+
     def __init__(self, name):
         super().__init__(name)
 
 
 class City(Address):
+    id = field.PrimaryKey(storetype.Integer(), name='id')
+
     def __init__(self, name):
         super().__init__(name)
 
 
 p = Person('people')
-print(p.first_name.type.max_length)
-p1 = Address('ppp')
-p2 = City('ososo')
+p1 = Address('address')
+p2 = City('city')
 m = Manager()
+conf = ConnectionConfiguration(user="postgres",
+                                   password="rajka1001",
+                                   database="postgres")
+m.connect(conf)
+m.create_tables()

@@ -44,5 +44,5 @@ class DDLBuilder:
         f_keys = ', '.join([
             f"CONSTRAINT fk_{generate_escape_seq()} FOREIGN KEY({quote_database_object_name_unsafe(loc)}) REFERENCES {quote_database_object_name_unsafe(other)}({quote_database_object_name_unsafe(nam)})"
             for loc, (nam, other) in self.__foreign_keys])
-        print(len(f_keys))
-        return f"CREATE TABLE {quote_database_object_name_unsafe(self.__name)} ({fields}, PRIMARY KEY({quote_database_object_name_unsafe(self.__primary_key)}){', ' if len(f_keys) > 0 else ''}{f_keys})"
+        # print(len(f_keys))
+        return f"CREATE TABLE IF NOT EXISTS {quote_database_object_name_unsafe(self.__name)} ({fields}, PRIMARY KEY({quote_database_object_name_unsafe(self.__primary_key)}){', ' if len(f_keys) > 0 else ''}{f_keys})"
