@@ -43,10 +43,27 @@ class DDLPrimaryKeyBuildable(DDLBuildable):
     def build(self):
         return f"PRIMARY KEY({self.__name})"
 
+class DDLField(DDLBuildable):
+    __name: str
+    __type: StoreType
+    __nullable: bool
+
+    def __init__(self, name: str, stype: StoreType, nullable: bool):
+        self.__name = quote_database_object_name_unsafe(name)
+        self.__type = stype
+        self.__nullable = nullable
+
+    def build(self):
+        if not self.__nullable:
+            n = ' NOT NULL'
+        else:
+            n = ''
+        return f"{self.__name} {self.__type.definition()}{n}"
+
 
 class DDLBuilder:
     __name: Union[str, None]
-    __fields: List[Tuple[str, StoreType]]
+    __fields: List[DDLField]
     __constraints: List[DDLBuildable]
     __primary_key: Union[DDLPrimaryKeyBuildable, None]
 
@@ -57,7 +74,7 @@ class DDLBuilder:
         self.__primary_key = None
 
     def name(self, name: str) -> 'DDLBuilder':
-        self.__name = name
+        self.__name = quote_database_object_name_unsafe(name)
         return self
 
     def field(self, name: str, stype: StoreType, nullable: bool = True) -> 'DDLBuilder':
@@ -83,8 +100,6 @@ class DDLBuilder:
         assert self.__name is not None
         assert len(self.__fields) > 0
         assert self.__primary_key is not None
-        fields = ', '.join(
-            [f"{quote_database_object_name_unsafe(nam)} {typ.definition()}" for (nam, typ) in self.__fields])
-        f_keys = ', '.join([c.build() for c in [self.__primary_key, *self.__constraints]])
+        fields = ', '.join([c.build() for c in [*self.__fields, self.__primary_key, *self.__constraints]])
 
-        return f"CREATE TABLE {quote_database_object_name_unsafe(self.__name)} ({fields}, {f_keys})"
+        return f"CREATE TABLE {self.__name} ({fields})"

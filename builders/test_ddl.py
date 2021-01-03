@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from builders.ddl import DDLBuilder, DDLPrimaryKeyBuildable, DDLForeignKeyBuildable, DDLUniqueBuildable, DDLBuildable
+from builders.ddl import DDLBuilder, DDLPrimaryKeyBuildable, DDLForeignKeyBuildable, DDLUniqueBuildable, DDLBuildable, DDLField
 from fields.storetype import Text, Integer, Float, TimeStamp
 
 
@@ -11,14 +11,14 @@ class TestDDLBuilder(TestCase):
             .field("id", Integer()) \
             .field("a", Text()) \
             .field("b", Integer()) \
-            .field("c", Float()) \
+            .field("c", Float(), False) \
             .field("d", TimeStamp()) \
             .primary_key("id") \
             .foreign_key("b", "B", "id") \
             .unique("a")
-        print(builder.build())
+
         self.assertRegex(builder.build(),
-                         r'CREATE TABLE "A" \("id" INTEGER, "a" VARCHAR\(255\), "b" INTEGER, "c" NUMERIC, "d" TIMESTAMP, PRIMARY KEY\("id"\), CONSTRAINT fk_[A-Za-z0-9]{5} FOREIGN KEY\("b"\) REFERENCES "B"\("id"\), CONSTRAINT uk_[A-Za-z0-9]{5} UNIQUE \("a"\)\)')
+                         r'CREATE TABLE "A" \("id" INTEGER, "a" VARCHAR\(255\), "b" INTEGER, "c" NUMERIC NOT NULL, "d" TIMESTAMP, PRIMARY KEY\("id"\), CONSTRAINT fk_[A-Za-z0-9]{5} FOREIGN KEY\("b"\) REFERENCES "B"\("id"\), CONSTRAINT uk_[A-Za-z0-9]{5} UNIQUE \("a"\)\)')
 
     def test_override_name(self):
         builder = DDLBuilder() \
@@ -100,7 +100,24 @@ class TestDDLBuilder(TestCase):
 
         self.assertRegex(constraint.build(), r'CONSTRAINT uk_[A-Za-z0-9]{5} UNIQUE \("a"\)')
 
-    def test_base_constraint(self):
+    def test_base_buildable(self):
         constraint = DDLBuildable()
 
         self.assertRaises(NotImplementedError, constraint.build)
+
+    def test_ddl_filed(self):
+        tests = [
+            (DDLField("a", Integer(), True), '"a" INTEGER'),
+            (DDLField("a", Integer(), False), '"a" INTEGER NOT NULL'),
+            (DDLField("a", Text(), False), '"a" VARCHAR(255) NOT NULL'),
+            (DDLField("a", Text(), True), '"a" VARCHAR(255)'),
+            (DDLField("a", Text(max_length = 10), True), '"a" VARCHAR(10)'),
+            (DDLField("a", Float(), True), '"a" NUMERIC'),
+            (DDLField("a", Float(), False), '"a" NUMERIC NOT NULL'),
+            (DDLField("a", TimeStamp(), True), '"a" TIMESTAMP'),
+            (DDLField("a", TimeStamp(), False), '"a" TIMESTAMP NOT NULL'),
+            (DDLField("a", TimeStamp(with_zone=True), True), '"a" TIMESTAMP WITH TIME ZONE'),
+        ]
+
+        for (f, r) in tests:
+            self.assertEqual(f.build(), r)
