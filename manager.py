@@ -60,8 +60,8 @@ class Manager(metaclass=SingletonMeta):
                     dictionary = defaultdict(list)
                     for i, j in attr_list:
                         dictionary[i].append(j)
-                    print(dict(dictionary))
-                    table_names.append(dict(dictionary).get('_table_name')[0])
+                    dictionary = dict(dictionary)
+                    table_names.append(dictionary.get('_table_name')[0])
         return table_names
 
 class Person(Entity):
