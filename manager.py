@@ -7,8 +7,6 @@ from entity.entity import Entity
 import gc
 import inspect
 from collections import defaultdict
-from fields import field
-from fields import storetype
 from fields.storetype import StoreType
 import builders.ddl as ddl
 
@@ -33,7 +31,7 @@ class Manager(metaclass=SingletonMeta):
         print(self.__all_data)
 
     def create_tables(self):
-        # Do rozwiniecia o nowe rzeczy w ddl builder unique, not null etc..
+        # TODO: relacje, foreign_key itd...
         if self.__is_connected:
             for i in range(len(self.__all_data)):
                 builder = ddl.DDLBuilder()
@@ -41,14 +39,18 @@ class Manager(metaclass=SingletonMeta):
                 name = self.__all_data[i].get('_table_name')
                 builder.name(name)
                 for key, value in self.__all_data[i].items():
+                    if type(value).__name__ == 'PrimaryKey':
+                        builder.field(value.name, value.type, False)
+                        builder.primary_key(value.name)
+                        has_primary_key = True
                     if type(value).__name__ == 'Column':
-                        builder.field(value.name, value.type)
+                        builder.field(value.name, value.type, value.nullable)
                         if not has_primary_key:
                             builder.primary_key(value.name)
                             has_primary_key = True
-                    if type(value).__name__ == 'PrimaryKey':
-                        builder.field(value.name, value.type)
-                        builder.primary_key(value.name)
+                        if value.unique:
+                            builder.unique(value.name)
+
                 self.__database_connection.commit(builder.build(), 'CREATE TABLE')
         else:
             print("CREATE A CONNECTION TO DATABASE!")

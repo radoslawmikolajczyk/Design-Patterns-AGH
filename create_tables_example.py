@@ -6,15 +6,15 @@ from manager import Manager
 
 
 class Person(Entity):
-    first_name = field.Column(storetype.Text(max_length=30), name="first_name")
-    second_name = field.Column(storetype.Text(max_length=80), name="second_name")
+    _first_name = field.Column(storetype.Text(max_length=30), name="first_name")
+    _second_name = field.Column(storetype.Text(max_length=80), name="second_name")
 
     def __init__(self, name):
         super().__init__(name)
 
 
 class Address(Entity):
-    xd = field.Column(storetype.Text(max_length=30), name="xd")
+    xd = field.Column(storetype.Text(max_length=30), name="xd", unique=True, nullable=False)
 
     def __init__(self, name):
         super().__init__(name)
