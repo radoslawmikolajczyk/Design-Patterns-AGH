@@ -27,7 +27,7 @@ class Manager(metaclass=SingletonMeta):
         self.__is_connected = False
         self.__database_connection = DatabaseConnection()
         # get all table names from all classes which inherit from Entity
-        self.__tables, self.__all_data = self.__get_all_instances(Entity)
+        self.__all_data = self.__get_all_instances(Entity)
         print(self.__all_data)
 
     def create_tables(self):
@@ -36,9 +36,9 @@ class Manager(metaclass=SingletonMeta):
             for i in range(len(self.__all_data)):
                 builder = ddl.DDLBuilder()
                 has_primary_key = False
-                name = self.__all_data[i].get('_table_name')
+                name = list(self.__all_data[i])[0]
                 builder.name(name)
-                for key, value in self.__all_data[i].items():
+                for key, value in list(self.__all_data[i].values())[0].items():
                     if type(value).__name__ == 'PrimaryKey':
                         builder.field(value.name, value.type, False)
                         builder.primary_key(value.name)
@@ -121,42 +121,27 @@ class Manager(metaclass=SingletonMeta):
     def select(self, model, query: str) -> list:
         return []
 
+    def __all_subclasses(self, cls):
+        return set(cls.__subclasses__()).union(
+            [s for c in cls.__subclasses__() for s in self.__all_subclasses(c)])
+
     def __get_all_instances(self, cls):
-        table_names = []
+        cls = self.__all_subclasses(cls)
         tables = []
-        for subclass in cls.__subclasses__():
-            for obj in gc.get_objects():
-                entire_table = {}
-                if isinstance(obj, subclass):
-                    attr = inspect.getmembers(obj, lambda a: not (inspect.isroutine(a)))
-                    attr_list = [a for a in attr if not (a[0].startswith('__') and a[0].endswith('__'))]
-                    dictionary = defaultdict(list)
-                    for i, j in attr_list:
-                        dictionary[i].append(j)
-                    dictionary = dict(dictionary)
+        for subclass in cls:
+            values = subclass.__dict__
+            dictionary = defaultdict(list)
+            for a, b in values.items():
+                if not (a.startswith('__') and a.endswith('__')):
+                    dictionary[a].append(b)
+            dictionary = dict(dictionary)
+            new_dict = {}
+            t_name = subclass.__name__.lower()
+            for key, value in dictionary.items():
+                if not key == '_table_name':
+                    new_dict[key] = value[0]
+                else:
+                    t_name = dictionary.get('_table_name')[0]
 
-                    for key, value in dictionary.items():
-
-                        # print(key, " -> ", type(value[0]).__name__)
-                        if key == '_table_name':
-                            entire_table[key] = value[0]
-                        else:
-                            entire_table[key] = value[0]
-                            '''column_params = value[0].__dict__
-                            column_dict = {}
-                            for k, v in column_params.items():
-                                if k == 'type':
-                                    type_dict = {key: value[0]}
-                                    type_data = {'StoreType': v.__class__.__name__}
-                                    for k1, v1 in v.__dict__.items():
-                                        type_data[k1] = v1
-                                    type_dict['type_params'] = type_data
-                                    column_dict[k] = type_dict
-                                else:
-                                    column_dict[k] = v
-                            entire_table[key] = column_dict
-                            #print(column_dict)'''
-                    tables.append(entire_table)
-
-                    table_names.append(dictionary.get('_table_name')[0])
-        return table_names, tables
+            tables.append({t_name: new_dict})
+        return tables
