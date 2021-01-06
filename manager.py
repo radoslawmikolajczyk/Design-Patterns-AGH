@@ -7,7 +7,9 @@ from entity.entity import Entity
 import gc
 import inspect
 from collections import defaultdict
-from fields.storetype import StoreType
+
+from fields.field import Column
+from fields.storetype import StoreType, Text
 import builders.ddl as ddl
 
 
@@ -28,6 +30,7 @@ class Manager(metaclass=SingletonMeta):
         self.__database_connection = DatabaseConnection()
         # get all table names from all classes which inherit from Entity
         self.__tables, self.__all_data = self.__get_all_instances(Entity)
+        print(self.__tables)
         print(self.__all_data)
 
     def create_tables(self):
@@ -54,7 +57,7 @@ class Manager(metaclass=SingletonMeta):
                 self.__database_connection.commit(builder.build(), 'CREATE TABLE')
         else:
             print("CREATE A CONNECTION TO DATABASE!")
-        self.close()
+        #self.close()
 
     def connect(self, conf: ConnectionConfiguration):
         self.__database_connection.configure(conf)
@@ -66,24 +69,35 @@ class Manager(metaclass=SingletonMeta):
         self.__is_connected = False
 
     def insert(self, entity: Entity):
-        # TODO: - find the exact name of the table
-        #       - find the columns (name, type) of the table
-        table_name = str(type(entity))
-        columns = dict()  # Dict[str, StoreType]
+        table_name = entity._table_name
+        types, names = self._find_names_and_types_of_columns(table_name)
 
         builder = InsertBuilder().into(table_name)
-        for column_name in columns:
-            store_type = columns[column_name]
-            value = getattr(entity, column_name)
+        for field_name in types.keys():
+            store_type = types[field_name]
+            column_name = names[field_name]
+            value = getattr(entity, field_name)
             builder.add(column_name, store_type, value)
 
-        query = builder.build()
-        self.__database_connection.commit(query)
+        self._execute_query(builder.build(), 'INSERT')
+
+    def _find_names_and_types_of_columns(self, table_name):
+        table = self.__tables.index(table_name)
+        fields = self.__all_data[table].items()
+        types = dict()  # [field_name : column_type]
+        names = dict()  # [field_name : column_name]
+
+        for field_name, field_object in fields:
+            if isinstance(field_object, Column):
+                types[field_name] = field_object.type
+                names[field_name] = field_object.name
+        print(types)
+        return types, names
 
     def delete(self, entity: Entity):
-        # TODO: - find the exact name of the table
-        #       - find the primary key (name, type) of the table
-        table_name = str(type(entity))
+        # TODO:
+        #  - find the primary key (name, type) of the table
+        table_name = entity._table_name
         primary_key = ('', StoreType())  # Tuple[str, str]
         primary_key_name, store_type = primary_key
         value = getattr(entity, primary_key_name)
@@ -91,14 +105,13 @@ class Manager(metaclass=SingletonMeta):
         builder = DeleteBuilder().table(table_name)
         builder.where(primary_key_name, store_type, value)
 
-        query = builder.build()
-        self.__database_connection.commit(query)
+        self._execute_query(builder.build(), 'DELETE')
 
     def update(self, entity: Entity):
-        # TODO: - find the exact name of the table
-        #       - find the columns (name, type) of the table
-        #       - find the primary key (name, type) of the table
-        table_name = str(type(entity))
+        # TODO:
+        #  - find the columns (name, type) of the table
+        #  - find the primary key (name, type) of the table
+        table_name = entity._table_name
         columns = dict()  # Dict[str, StoreType]
 
         builder = UpdateBuilder().table(table_name)
@@ -112,8 +125,7 @@ class Manager(metaclass=SingletonMeta):
         value = getattr(entity, primary_key_name)
         builder.where(primary_key_name, store_type, value)
 
-        query = builder.build()
-        self.__database_connection.commit(query)
+        self._execute_query(builder.build(), 'UPDATE')
 
     def find_by_id(self, model, id):
         pass
@@ -160,3 +172,10 @@ class Manager(metaclass=SingletonMeta):
 
                     table_names.append(dictionary.get('_table_name')[0])
         return table_names, tables
+
+    def _execute_query(self, query: str, query_type: str = 'QUERY'):
+        if self.__is_connected:
+            self.__database_connection.commit(query, query_type)
+            self.close()
+        else:
+            print("CREATE A CONNECTION TO DATABASE!")

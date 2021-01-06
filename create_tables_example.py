@@ -36,3 +36,6 @@ conf = ConnectionConfiguration(user="postgres",
                                database="postgres")
 m.connect(conf)
 m.create_tables()
+p._first_name = "aaaas"
+p._second_name = "bbbbb"
+m.insert(p)
