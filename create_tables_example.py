@@ -23,15 +23,13 @@ class Address(Entity):
 
 
 class City(Address):
+    _table_name = 'city1'
     id = field.PrimaryKey(storetype.Integer(), name='id')
+    name = field.Column(storetype.Text(max_length=30), name='name')
 
     def __init__(self):
         super().__init__()
 
-
-p = Person()
-p1 = Address()
-p2 = City()
 m = Manager()
 conf = ConnectionConfiguration(user="postgres",
                                password="rajka1001",
@@ -39,12 +37,21 @@ conf = ConnectionConfiguration(user="postgres",
 m.connect(conf)
 m.create_tables()
 
+p = Person()
+p1 = Address()
+p2 = City()
+
 # simple example for insert, update, delete
-p._first_name = "first"
+p._first_name = "12345"
 p._second_name = "second"
 m.insert(p)
-p._second_name = "secondsecond"
-m.update(p)
+#p._second_name = "secondsecond"
+#m.update(p)
 m.delete(p)
+
+# p2.id = 1
+# p2.name = "namep2"
+# m.insert(p2)
+# m.delete(p2)
 
 m.close()
