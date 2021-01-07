@@ -152,7 +152,7 @@ class Manager(metaclass=SingletonMeta):
         names = dict()  # [field_name : column_name]
 
         for field_name, field_object in fields:
-            if isinstance(field_object, Column):
+            if isinstance(field_object, Column) or isinstance(field_object, PrimaryKey):
                 types[field_name] = field_object.type
                 names[field_name] = field_object.name
 

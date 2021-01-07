@@ -45,13 +45,14 @@ p2 = City()
 p._first_name = "12345"
 p._second_name = "second"
 m.insert(p)
-#p._second_name = "secondsecond"
-#m.update(p)
+# p._second_name = "secondsecond"
+# m.update(p)
 m.delete(p)
 
-# p2.id = 1
-# p2.name = "namep2"
-# m.insert(p2)
-# m.delete(p2)
-
+p2.id = 1
+p2.name = "namep2"
+m.insert(p2)
+# p2.name ="upadtename"
+# m.update(p2)
+m.delete(p2)
 m.close()
