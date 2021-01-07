@@ -6,7 +6,7 @@ from connection.database import DatabaseConnection
 from entity.entity import Entity
 from collections import defaultdict
 
-from fields.field import Column
+from fields.field import Column, PrimaryKey
 from fields.storetype import StoreType, Text
 import builders.ddl as ddl
 
@@ -54,7 +54,6 @@ class Manager(metaclass=SingletonMeta):
                 self.__database_connection.commit(builder.build(), 'CREATE TABLE')
         else:
             print("CREATE A CONNECTION TO DATABASE!")
-        # self.close()
 
     def connect(self, conf: ConnectionConfiguration):
         self.__database_connection.configure(conf)
@@ -79,35 +78,32 @@ class Manager(metaclass=SingletonMeta):
         self._execute_query(builder.build(), 'INSERT')
 
     def delete(self, entity: Entity):
-        # TODO:
-        #  - find the primary key (name, type) of the table
-        table_name = entity._table_name
-        primary_key = ('', StoreType())  # Tuple[str, str]
-        primary_key_name, store_type = primary_key
-        value = getattr(entity, primary_key_name)
+        table_name = self._get_table_name(entity)
+        primary_key = self._find_primary_key_of_table(table_name)
+        assert primary_key is not None
+        primary_key_field_name, primary_key_name, primary_key_type = primary_key
+        primary_key_value = getattr(entity, primary_key_field_name)
 
         builder = DeleteBuilder().table(table_name)
-        builder.where(primary_key_name, store_type, value)
+        builder.where(primary_key_name, primary_key_type, primary_key_value)
 
         self._execute_query(builder.build(), 'DELETE')
 
     def update(self, entity: Entity):
-        # TODO:
-        #  - find the columns (name, type) of the table
-        #  - find the primary key (name, type) of the table
-        table_name = entity._table_name
-        columns = dict()  # Dict[str, StoreType]
+        table_name = self._get_table_name(entity)
+        types, names = self._find_names_and_types_of_columns(table_name)
+        primary_key = self._find_primary_key_of_table(table_name)
+        assert primary_key is not None
+        primary_key_field_name, primary_key_name, primary_key_type = primary_key
+        primary_key_value = getattr(entity, primary_key_field_name)
 
         builder = UpdateBuilder().table(table_name)
-        for column_name in columns:
-            store_type = columns[column_name]
-            value = getattr(entity, column_name)
+        for field_name in types.keys():
+            store_type = types[field_name]
+            column_name = names[field_name]
+            value = getattr(entity, field_name)
             builder.add(column_name, store_type, value)
-
-        primary_key = ('', StoreType())  # Tuple[str, str]
-        primary_key_name, store_type = primary_key
-        value = getattr(entity, primary_key_name)
-        builder.where(primary_key_name, store_type, value)
+        builder.where(primary_key_name, primary_key_type, primary_key_value)
 
         self._execute_query(builder.build(), 'UPDATE')
 
@@ -144,7 +140,7 @@ class Manager(metaclass=SingletonMeta):
         return tables
 
     def _get_table_name(self, entity: Entity):
-        if entity._table_name is not '':
+        if entity._table_name is not "":
             table_name = entity._table_name
         else:
             table_name = entity.__class__.__name__.lower()
@@ -159,11 +155,27 @@ class Manager(metaclass=SingletonMeta):
             if isinstance(field_object, Column):
                 types[field_name] = field_object.type
                 names[field_name] = field_object.name
+
         return types, names
+
+    def _find_primary_key_of_table(self, table_name):
+        fields = self.__all_data[table_name].items()
+
+        for field_name, field_object in fields:
+            if isinstance(field_object, PrimaryKey):
+                primary_key = [field_name, field_object.name, field_object.type]
+                return primary_key
+
+        # if we don't find the primary key field, the primary key is the first column
+        for field_name, field_object in fields:
+            if isinstance(field_object, Column):
+                primary_key = [field_name, field_object.name, field_object.type]
+                return primary_key
+
+        return None
 
     def _execute_query(self, query: str, query_type: str = 'QUERY'):
         if self.__is_connected:
             self.__database_connection.commit(query, query_type)
-            self.close()
         else:
             print("CREATE A CONNECTION TO DATABASE!")

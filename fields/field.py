@@ -19,8 +19,8 @@ class Column(Field):
             initializes object with the given attributes
     """
 
-    def __init__(self, type, nullable=True, unique=False, name="DEFAULT"):
-        self.type = type
+    def __init__(self, column_type, nullable=True, unique=False, name="DEFAULT"):
+        self.type = column_type
         self.nullable = nullable
         self.unique = unique
         self.name = name

@@ -12,5 +12,4 @@ class Entity:
             initializes object with the given attributes
     """
 
-    def __init__(self, name):
-        self._table_name = name
+    _table_name = ""
