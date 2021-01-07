@@ -56,11 +56,15 @@ def quote_string(data: str) -> str:
 
 
 def generate_escape_seq() -> str:
-    """Generate 5 character escape sequence.
+    """Generate 6 character escape sequence.
     Digits, upper and lower letters are used.
+    Escape seq never starts with a number.
 
     Returns
     -------
-    5 character escape sequence
+    6 character escape sequence
     """
-    return ''.join(random.choice(string.digits + string.ascii_letters) for _ in range(5))
+    return ''.join([
+        random.choice(string.ascii_letters),
+        *[random.choice(string.digits + string.ascii_letters) for _ in range(5)]
+    ])
