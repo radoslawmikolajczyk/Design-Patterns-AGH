@@ -14,6 +14,7 @@ class Person(Entity):
 
 
 class Address(Entity):
+    _table_name = 'address'
     xd = field.Column(storetype.Text(max_length=30), name="xd", unique=True, nullable=False)
 
     def __init__(self, name):
@@ -27,9 +28,9 @@ class City(Address):
         super().__init__(name)
 
 
-p = Person('people')
-p1 = Address('address')
-p2 = City('city')
+# p = Person('people')
+# p1 = Address('address')
+# p2 = City('city')
 m = Manager()
 conf = ConnectionConfiguration(user="postgres",
                                password="rajka1001",
