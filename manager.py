@@ -112,15 +112,16 @@ class Manager(metaclass=SingletonMeta):
 
         self._commit_query(builder.build(), 'UPDATE')
 
-    def find_by_id(self, model: Entity, id: int):
+    def find_by_id(self, model: Entity, id):
         table_name = self._get_table_name(model)
+        id_name, _, id_type = self._find_primary_key_of_table(table_name)
         _, names = self._find_names_and_types_of_columns(table_name)
 
         builder = SelectBuilder().table(table_name)
         for field_name in names.keys():
             column_name = names[field_name]
             builder.add(table_name, column_name)
-        builder.where("id", Integer(), id)
+        builder.where(id_name, id_type, id)
         query, fields = builder.build()
         query_result = self._execute_query(query)
 
