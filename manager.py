@@ -1,14 +1,19 @@
 from builders.delete import DeleteBuilder
 from builders.insert import InsertBuilder
 from builders.update import UpdateBuilder
+from builders.select import SelectBuilder
+
 from connection.configuration import ConnectionConfiguration
 from connection.database import DatabaseConnection
 from entity.entity import Entity
 from collections import defaultdict
+from connection.query import QueryResult
 
 from fields.field import Column, PrimaryKey
-from fields.storetype import StoreType, Text
+from fields.storetype import StoreType, Text, Integer
 import builders.ddl as ddl
+
+from copy import deepcopy
 
 
 class SingletonMeta(type):
@@ -107,11 +112,32 @@ class Manager(metaclass=SingletonMeta):
 
         self._execute_query(builder.build(), 'UPDATE')
 
-    def find_by_id(self, model, id):
-        pass
+    def find_by_id(self, model: Entity, id):
+        table_name = self._get_table_name(model)
+        id_name, _, id_type = self._find_primary_key_of_table(table_name)
+        _, names = self._find_names_and_types_of_columns(table_name)
 
-    def select(self, model, query: str) -> list:
-        return []
+        builder = SelectBuilder().table(table_name)
+        for field_name in names.keys():
+            column_name = names[field_name]
+            builder.add(table_name, column_name)
+        builder.where(id_name, id_type, id)
+        query, fields = builder.build()
+        try:
+            return self.select(model, query)[0]
+        except IndexError: # Didn't find anything
+            return None
+
+    def select(self, model: Entity, query: str) -> list:
+        if self.__is_connected:
+            table_name = self._get_table_name(model)
+            _, names = self._find_names_and_types_of_columns(table_name)
+            query_result = self.__database_connection.execute(query)
+            result = self.__map_result_fields(model, names.keys(), query_result)
+            return result
+        else:
+            print("CREATE A CONNECTION TO DATABASE!")
+            return []
 
     def __all_subclasses(self, cls):
         return set(cls.__subclasses__()).union(
@@ -138,6 +164,14 @@ class Manager(metaclass=SingletonMeta):
 
             tables[t_name] = new_dict
         return tables
+
+    def __map_result_fields(self, model: Entity, field_names: [str], query_result: QueryResult):
+        records = query_result.get_query()
+        mapped = [deepcopy(model) for _ in records]
+        for i, record in enumerate(records):
+            for j, field in enumerate(record):
+                setattr(mapped[i], list(field_names)[j], field)
+        return mapped
 
     def _get_table_name(self, entity: Entity):
         if entity._table_name is not "":
