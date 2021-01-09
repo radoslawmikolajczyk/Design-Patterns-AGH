@@ -1,14 +1,19 @@
 from builders.delete import DeleteBuilder
 from builders.insert import InsertBuilder
 from builders.update import UpdateBuilder
+from builders.select import SelectBuilder
+
 from connection.configuration import ConnectionConfiguration
 from connection.database import DatabaseConnection
 from entity.entity import Entity
 from collections import defaultdict
+from connection.query import QueryResult
 
 from fields.field import Column, PrimaryKey
-from fields.storetype import StoreType, Text
+from fields.storetype import StoreType, Text, Integer
 import builders.ddl as ddl
+
+from copy import deepcopy
 
 
 class SingletonMeta(type):
@@ -75,7 +80,7 @@ class Manager(metaclass=SingletonMeta):
             value = getattr(entity, field_name)
             builder.add(column_name, store_type, value)
 
-        self._execute_query(builder.build(), 'INSERT')
+        self._commit_query(builder.build(), 'INSERT')
 
     def delete(self, entity: Entity):
         table_name = self._get_table_name(entity)
@@ -87,7 +92,7 @@ class Manager(metaclass=SingletonMeta):
         builder = DeleteBuilder().table(table_name)
         builder.where(primary_key_name, primary_key_type, primary_key_value)
 
-        self._execute_query(builder.build(), 'DELETE')
+        self._commit_query(builder.build(), 'DELETE')
 
     def update(self, entity: Entity):
         table_name = self._get_table_name(entity)
@@ -105,10 +110,25 @@ class Manager(metaclass=SingletonMeta):
             builder.add(column_name, store_type, value)
         builder.where(primary_key_name, primary_key_type, primary_key_value)
 
-        self._execute_query(builder.build(), 'UPDATE')
+        self._commit_query(builder.build(), 'UPDATE')
 
-    def find_by_id(self, model, id):
-        pass
+    def find_by_id(self, model: Entity, id: int):
+        table_name = self._get_table_name(model)
+        _, names = self._find_names_and_types_of_columns(table_name)
+
+        builder = SelectBuilder().table(table_name)
+        for field_name in names.keys():
+            column_name = names[field_name]
+            builder.add(table_name, column_name)
+        builder.where("id", Integer(), id)
+        query, fields = builder.build()
+        query_result = self._execute_query(query)
+
+        try:
+            result = self.__map_result_fields(model, names.keys(), query_result)[0]
+        except IndexError: # didn't find anything
+            result = None
+        return result
 
     def select(self, model, query: str) -> list:
         return []
@@ -138,6 +158,14 @@ class Manager(metaclass=SingletonMeta):
 
             tables[t_name] = new_dict
         return tables
+
+    def __map_result_fields(self, model: Entity, field_names: [str], query_result: QueryResult):
+        records = query_result.get_query()
+        mapped = [deepcopy(model) for _ in records]
+        for i, record in enumerate(records):
+            for j, field in enumerate(record):
+                setattr(mapped[i], list(field_names)[j], field)
+        return mapped
 
     def _get_table_name(self, entity: Entity):
         if entity._table_name is not "":
@@ -174,8 +202,14 @@ class Manager(metaclass=SingletonMeta):
 
         return None
 
-    def _execute_query(self, query: str, query_type: str = 'QUERY'):
+    def _commit_query(self, query: str, query_type: str = 'QUERY'):
         if self.__is_connected:
             self.__database_connection.commit(query, query_type)
+        else:
+            print("CREATE A CONNECTION TO DATABASE!")
+
+    def _execute_query(self, query: str):
+        if self.__is_connected:
+            return self.__database_connection.execute(query)
         else:
             print("CREATE A CONNECTION TO DATABASE!")
