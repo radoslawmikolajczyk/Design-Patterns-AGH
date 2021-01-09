@@ -80,7 +80,7 @@ class Manager(metaclass=SingletonMeta):
             value = getattr(entity, field_name)
             builder.add(column_name, store_type, value)
 
-        self._commit_query(builder.build(), 'INSERT')
+        self._execute_query(builder.build(), 'INSERT')
 
     def delete(self, entity: Entity):
         table_name = self._get_table_name(entity)
@@ -92,7 +92,7 @@ class Manager(metaclass=SingletonMeta):
         builder = DeleteBuilder().table(table_name)
         builder.where(primary_key_name, primary_key_type, primary_key_value)
 
-        self._commit_query(builder.build(), 'DELETE')
+        self._execute_query(builder.build(), 'DELETE')
 
     def update(self, entity: Entity):
         table_name = self._get_table_name(entity)
@@ -110,7 +110,7 @@ class Manager(metaclass=SingletonMeta):
             builder.add(column_name, store_type, value)
         builder.where(primary_key_name, primary_key_type, primary_key_value)
 
-        self._commit_query(builder.build(), 'UPDATE')
+        self._execute_query(builder.build(), 'UPDATE')
 
     def find_by_id(self, model: Entity, id):
         table_name = self._get_table_name(model)
@@ -123,16 +123,21 @@ class Manager(metaclass=SingletonMeta):
             builder.add(table_name, column_name)
         builder.where(id_name, id_type, id)
         query, fields = builder.build()
-        query_result = self._execute_query(query)
-
         try:
-            result = self.__map_result_fields(model, names.keys(), query_result)[0]
-        except IndexError: # didn't find anything
-            result = None
-        return result
+            return self.select(model, query)[0]
+        except IndexError: # Didn't find anything
+            return None
 
-    def select(self, model, query: str) -> list:
-        return []
+    def select(self, model: Entity, query: str) -> list:
+        if self.__is_connected:
+            table_name = self._get_table_name(model)
+            _, names = self._find_names_and_types_of_columns(table_name)
+            query_result = self.__database_connection.execute(query)
+            result = self.__map_result_fields(model, names.keys(), query_result)
+            return result
+        else:
+            print("CREATE A CONNECTION TO DATABASE!")
+            return []
 
     def __all_subclasses(self, cls):
         return set(cls.__subclasses__()).union(
@@ -203,14 +208,8 @@ class Manager(metaclass=SingletonMeta):
 
         return None
 
-    def _commit_query(self, query: str, query_type: str = 'QUERY'):
+    def _execute_query(self, query: str, query_type: str = 'QUERY'):
         if self.__is_connected:
             self.__database_connection.commit(query, query_type)
-        else:
-            print("CREATE A CONNECTION TO DATABASE!")
-
-    def _execute_query(self, query: str):
-        if self.__is_connected:
-            return self.__database_connection.execute(query)
         else:
             print("CREATE A CONNECTION TO DATABASE!")
