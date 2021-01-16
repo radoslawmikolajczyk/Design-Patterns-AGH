@@ -55,10 +55,21 @@ class Manager(metaclass=SingletonMeta):
                             has_primary_key = True
                         if value.unique:
                             builder.unique(value.name)
-
+                    if type(value).__name__ in ('OneToOne', 'OneToMany'):
+                        foreign_key = self.__get_o_relation(value.other)
+                        builder.field(value.name, foreign_key[2])
+                        if type(value).__name__ == 'OneToOne':
+                            builder.unique(value.name)  # Because it is one to one relation
+                        builder.foreign_key(value.name, self._get_table_name(value.other), foreign_key[1])
+                #TODO ogarnac tworzenie tabel w odpowiedniej kolejnosci
                 self.__database_connection.commit(builder.build(), 'CREATE TABLE')
         else:
             print("CREATE A CONNECTION TO DATABASE!")
+
+    # OneToOne and OneToMany relations
+    def __get_o_relation(self, entity: Entity):
+        table_name = self._get_table_name(entity)
+        return self._find_primary_key_of_table(table_name)
 
     def connect(self, conf: ConnectionConfiguration):
         self.__database_connection.configure(conf)
@@ -125,7 +136,7 @@ class Manager(metaclass=SingletonMeta):
         query, fields = builder.build()
         try:
             return self.select(model, query)[0]
-        except IndexError: # Didn't find anything
+        except IndexError:  # Didn't find anything
             return None
 
     def select(self, model: Entity, query: str) -> list:
@@ -177,7 +188,7 @@ class Manager(metaclass=SingletonMeta):
         if entity._table_name is not "":
             table_name = entity._table_name
         else:
-            table_name = entity.__class__.__name__.lower()
+            table_name = entity.__name__.lower()
         return table_name
 
     def _find_names_and_types_of_columns(self, table_name):

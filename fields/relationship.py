@@ -1,4 +1,4 @@
-from field import Field
+from .field import Field
 
 
 class Relationship(Field):
@@ -10,17 +10,21 @@ class Relationship(Field):
         other : OneToOne / OneToMany / ManyToMany object
         name : String
     """
+
     def __init__(self, other, name="DEFAULT"):
         self.other = other
         self.name = name
+
 
 class OneToOne(Relationship):
     def __init__(self, other, name):
         super().__init__(other, name)
 
+
 class OneToMany(Relationship):
     def __init__(self, other, name):
         super().__init__(other, name)
+
 
 class ManyToMany(Relationship):
     def __init__(self, other, name):
