@@ -18,7 +18,7 @@ class TestDDLBuilder(TestCase):
             .unique("a")
 
         self.assertRegex(builder.build(),
-                         r'CREATE TABLE "A" \("id" INTEGER, "a" VARCHAR\(255\), "b" INTEGER, "c" NUMERIC NOT NULL, "d" TIMESTAMP, PRIMARY KEY\("id"\), CONSTRAINT fk_[A-Za-z0-9]{5} FOREIGN KEY\("b"\) REFERENCES "B"\("id"\), CONSTRAINT uk_[A-Za-z0-9]{5} UNIQUE \("a"\)\)')
+                         r'CREATE TABLE IF NOT EXISTS "A" \("id" INTEGER, "a" VARCHAR\(255\), "b" INTEGER, "c" NUMERIC NOT NULL, "d" TIMESTAMP, PRIMARY KEY\("id"\), CONSTRAINT fk_[A-Za-z0-9]{6} FOREIGN KEY\("b"\) REFERENCES "B"\("id"\), CONSTRAINT uk_[A-Za-z0-9]{6} UNIQUE \("a"\)\)')
 
     def test_override_name(self):
         builder = DDLBuilder() \
@@ -30,7 +30,7 @@ class TestDDLBuilder(TestCase):
             .field("d", TimeStamp()) \
             .primary_key("id") \
             .name("B")
-        self.assertEqual(builder.build(), 'CREATE TABLE "B" ("id" INTEGER, "a" VARCHAR(255), "b" INTEGER, "c" NUMERIC, "d" TIMESTAMP, PRIMARY KEY("id"))')
+        self.assertEqual(builder.build(), 'CREATE TABLE IF NOT EXISTS "B" ("id" INTEGER, "a" VARCHAR(255), "b" INTEGER, "c" NUMERIC, "d" TIMESTAMP, PRIMARY KEY("id"))')
 
     def test_override_primary_key(self):
         builder = DDLBuilder() \
@@ -42,7 +42,7 @@ class TestDDLBuilder(TestCase):
             .field("c", Float()) \
             .field("d", TimeStamp()) \
             .primary_key("b")
-        self.assertEqual(builder.build(), 'CREATE TABLE "A" ("id" INTEGER, "a" VARCHAR(255), "b" INTEGER, "c" NUMERIC, "d" TIMESTAMP, PRIMARY KEY("b"))')
+        self.assertEqual(builder.build(), 'CREATE TABLE IF NOT EXISTS "A" ("id" INTEGER, "a" VARCHAR(255), "b" INTEGER, "c" NUMERIC, "d" TIMESTAMP, PRIMARY KEY("b"))')
 
     def test_is_empty(self):
         builder = DDLBuilder()
@@ -83,7 +83,8 @@ class TestDDLBuilder(TestCase):
             .field("b", Integer()) \
             .field("c", Float()) \
             .field("d", TimeStamp())
-        self.assertRaises(AssertionError, builder.build)
+
+        self.assertEqual(builder.build(), 'CREATE TABLE IF NOT EXISTS "A" ("id" INTEGER, "a" VARCHAR(255), "b" INTEGER, "c" NUMERIC, "d" TIMESTAMP)')
 
     def test_primary_key_constraint(self):
         constraint = DDLPrimaryKeyBuildable("a")
@@ -93,12 +94,12 @@ class TestDDLBuilder(TestCase):
     def test_foreign_key_constraint(self):
         constraint = DDLForeignKeyBuildable("a", "B", "b")
 
-        self.assertRegex(constraint.build(), r'CONSTRAINT fk_[A-Za-z0-9]{5} FOREIGN KEY\("a"\) REFERENCES "B"\("b"\)')
+        self.assertRegex(constraint.build(), r'CONSTRAINT fk_[A-Za-z0-9]{6} FOREIGN KEY\("a"\) REFERENCES "B"\("b"\)')
 
     def test_unique_constraint(self):
         constraint = DDLUniqueBuildable("a")
-
-        self.assertRegex(constraint.build(), r'CONSTRAINT uk_[A-Za-z0-9]{5} UNIQUE \("a"\)')
+        print(constraint.build())
+        self.assertRegex(constraint.build(), r'CONSTRAINT uk_[A-Za-z0-9]{6} UNIQUE \("a"\)')
 
     def test_base_buildable(self):
         constraint = DDLBuildable()
