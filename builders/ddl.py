@@ -99,9 +99,15 @@ class DDLBuilder:
     def build(self) -> str:
         assert self.__name is not None
         assert len(self.__fields) > 0
-        assert self.__primary_key is not None
 
-        fields = ', '.join([c.build() for c in [*self.__fields, self.__primary_key, *self.__constraints]])
+        parts = self.__fields.copy()
+
+        if self.__primary_key is not None:
+            parts.append(self.__primary_key)
+
+        parts += self.__constraints
+
+        fields = ', '.join([c.build() for c in parts])
 
         return f"CREATE TABLE IF NOT EXISTS {self.__name} ({fields})"
 
