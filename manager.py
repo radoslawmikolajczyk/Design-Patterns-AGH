@@ -34,8 +34,7 @@ class Manager(metaclass=SingletonMeta):
         # get all table names from all classes which inherit from Entity
         self.__all_data, self.__class_names = self.__get_all_instances(Entity)
         self.__junction_tables = []
-        print(self.__all_data)
-        print(self.__class_names)
+        self.__junction_tables_names = []
 
     def create_tables(self):
         if self.__is_connected:
@@ -69,6 +68,8 @@ class Manager(metaclass=SingletonMeta):
                         self.__create_junction_table(name, second_table, value, second_value)
 
                 self.__database_connection.commit(builder.build(), 'CREATE TABLE')
+            for build in self.__junction_tables:
+                self.__database_connection.commit(build, 'CREATE JUNCTION TABLE')
         else:
             print("CREATE A CONNECTION TO DATABASE!")
 
@@ -87,7 +88,7 @@ class Manager(metaclass=SingletonMeta):
         table_name = first_table+"_"+second_table
         reversed_name = second_table+"_"+first_table
 
-        if table_name not in self.__junction_tables and reversed_name not in self.__junction_tables:
+        if table_name not in self.__junction_tables and reversed_name not in self.__junction_tables_names:
             first_fk = self._find_primary_key_of_table(first_table)
             second_fk = self._find_primary_key_of_table(second_table)
 
@@ -95,14 +96,17 @@ class Manager(metaclass=SingletonMeta):
             builder.name(table_name)
             builder.field(first_field_name.name, first_fk[2], False)
             builder.field(second_field_name.name, second_fk[2], False)
-            builder.foreign_key(first_field_name.name, first_table, first_fk[1])
-            builder.foreign_key(second_field_name.name, second_table, second_fk[1])
+            builder.foreign_key(first_field_name.name, second_table, second_fk[1])
+            builder.foreign_key(second_field_name.name, first_table, first_fk[1])
 
-            unique_str = first_field_name.name+", "+second_field_name.name
-            builder.unique(unique_str)
-
+            self.__junction_tables_names.append(table_name)
+            self.__junction_tables.append(builder.build())
             print(builder.build())
-            self.__junction_tables.append(table_name)
+            data = dict()
+            data[first_field_name.name] = first_fk[2]
+            data[second_field_name.name] = second_fk[2]
+            data['joined_tables'] = [first_table, second_table]
+            self.__all_data[table_name] = data
 
     def connect(self, conf: ConnectionConfiguration):
         self.__database_connection.configure(conf)
