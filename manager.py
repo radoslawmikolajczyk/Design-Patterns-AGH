@@ -8,9 +8,9 @@ from connection.database import DatabaseConnection
 from entity.entity import Entity
 from collections import defaultdict
 from connection.query import QueryResult
+from fields.relationship import OneToOne, OneToMany, ManyToMany
 
 from fields.field import Column, PrimaryKey
-from fields.storetype import StoreType, Text, Integer
 import builders.ddl as ddl
 
 from copy import deepcopy
@@ -32,11 +32,12 @@ class Manager(metaclass=SingletonMeta):
         self.__is_connected = False
         self.__database_connection = DatabaseConnection()
         # get all table names from all classes which inherit from Entity
-        self.__all_data = self.__get_all_instances(Entity)
+        self.__all_data, self.__class_names = self.__get_all_instances(Entity)
+        self.__junction_tables = []
         print(self.__all_data)
+        print(self.__class_names)
 
     def create_tables(self):
-        # TODO: relacje, foreign_key itd...
         if self.__is_connected:
             for i in range(len(self.__all_data)):
                 builder = ddl.DDLBuilder()
@@ -44,32 +45,64 @@ class Manager(metaclass=SingletonMeta):
                 name = list(self.__all_data.keys())[i]
                 builder.name(name)
                 for key, value in self.__all_data[name].items():
-                    if type(value).__name__ == 'PrimaryKey':
+                    if isinstance(value, PrimaryKey):
                         builder.field(value.name, value.type, False)
                         builder.primary_key(value.name)
                         has_primary_key = True
-                    if type(value).__name__ == 'Column':
+                    if isinstance(value, Column):
                         builder.field(value.name, value.type, value.nullable)
                         if not has_primary_key:
                             builder.primary_key(value.name)
                             has_primary_key = True
                         if value.unique:
                             builder.unique(value.name)
-                    if type(value).__name__ in ('OneToOne', 'OneToMany'):
+                    if isinstance(value, OneToOne) or isinstance(value, OneToMany):
                         foreign_key = self.__get_o_relation(value.other)
                         builder.field(value.name, foreign_key[2])
-                        if type(value).__name__ == 'OneToOne':
+                        if isinstance(value, OneToOne):
                             builder.unique(value.name)  # Because it is one to one relation
-                        builder.foreign_key(value.name, self._get_table_name(value.other), foreign_key[1])
-                #TODO ogarnac tworzenie tabel w odpowiedniej kolejnosci
+                        foreign_table = self._get_table_name(self.__class_names.get(value.other))
+                        builder.foreign_key(value.name, foreign_table, foreign_key[1])
+                    if isinstance(value, ManyToMany):
+                        second_table = self._get_table_name(self.__class_names.get(value.other))
+                        second_value = self.__find_many_to_many_relation_value(second_table)
+                        self.__create_junction_table(name, second_table, value, second_value)
+
                 self.__database_connection.commit(builder.build(), 'CREATE TABLE')
         else:
             print("CREATE A CONNECTION TO DATABASE!")
 
     # OneToOne and OneToMany relations
-    def __get_o_relation(self, entity: Entity):
+    def __get_o_relation(self, entity_name):
+        entity = self.__class_names.get(entity_name)
         table_name = self._get_table_name(entity)
         return self._find_primary_key_of_table(table_name)
+
+    def __find_many_to_many_relation_value(self, table_name):
+        for key, value in self.__all_data[table_name].items():
+            if isinstance(value, ManyToMany):
+                return value
+
+    def __create_junction_table(self, first_table, second_table, first_field_name, second_field_name):
+        table_name = first_table+"_"+second_table
+        reversed_name = second_table+"_"+first_table
+
+        if table_name not in self.__junction_tables and reversed_name not in self.__junction_tables:
+            first_fk = self._find_primary_key_of_table(first_table)
+            second_fk = self._find_primary_key_of_table(second_table)
+
+            builder = ddl.DDLBuilder()
+            builder.name(table_name)
+            builder.field(first_field_name.name, first_fk[2], False)
+            builder.field(second_field_name.name, second_fk[2], False)
+            builder.foreign_key(first_field_name.name, first_table, first_fk[1])
+            builder.foreign_key(second_field_name.name, second_table, second_fk[1])
+
+            unique_str = first_field_name.name+", "+second_field_name.name
+            builder.unique(unique_str)
+
+            print(builder.build())
+            self.__junction_tables.append(table_name)
 
     def connect(self, conf: ConnectionConfiguration):
         self.__database_connection.configure(conf)
@@ -151,14 +184,20 @@ class Manager(metaclass=SingletonMeta):
             return []
 
     def __all_subclasses(self, cls):
-        return set(cls.__subclasses__()).union(
-            [s for c in cls.__subclasses__() for s in self.__all_subclasses(c)])
+        all_subclasses = []
+
+        for subclass in cls.__subclasses__():
+            all_subclasses.append(subclass)
+            all_subclasses.extend(self.__all_subclasses(subclass))
+
+        return all_subclasses
 
     def __get_all_instances(self, cls):
         cls = self.__all_subclasses(cls)
         tables = dict()
-
+        class_names = dict()
         for subclass in cls:
+
             values = subclass.__dict__
             dictionary = defaultdict(list)
             for a, b in values.items():
@@ -174,7 +213,8 @@ class Manager(metaclass=SingletonMeta):
                     t_name = dictionary.get('_table_name')[0]
 
             tables[t_name] = new_dict
-        return tables
+            class_names[subclass.__name__] = subclass
+        return tables, class_names
 
     def __map_result_fields(self, model: Entity, field_names: [str], query_result: QueryResult):
         records = query_result.get_query()
