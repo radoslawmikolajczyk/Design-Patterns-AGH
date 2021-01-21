@@ -21,7 +21,7 @@ class OneToOne(Relationship):
         super().__init__(other, name)
 
 
-class OneToMany(Relationship):
+class ManyToOne(Relationship):
     def __init__(self, other, name):
         super().__init__(other, name)
 

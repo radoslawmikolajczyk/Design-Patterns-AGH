@@ -7,21 +7,14 @@ from manager import Manager
 
 
 class Person(Entity):
-    _table_name = 'osoba'
+    # _table_name = 'osoba'
     _first_name = field.Column(storetype.Text(max_length=30), name="first_name")
     _second_name = field.Column(storetype.Text(max_length=80), name="second_name")
 
-    def __init__(self):
-        super().__init__()
-
-
 class Address(Entity):
     # _table_name = 'address'
-    xd = field.Column(storetype.Text(max_length=30), name="xd2", unique=True, nullable=False)
-    cos = rel.OneToMany('Person', "pppeeerson")
-
-    def __init__(self):
-        super().__init__()
+    xd = field.Column(storetype.Text(max_length=30), name='xd2', unique=True, nullable=False)
+    cos = rel.ManyToOne('Person', "pppeeerson")
 
 
 class City(Address):
@@ -30,18 +23,12 @@ class City(Address):
     name = field.Column(storetype.Text(max_length=30), name='name')
     address = rel.OneToOne('Address', name='address_id')
 
-    def __init__(self):
-        super().__init__()
-
 
 class Test(Entity):
     _table_name = 'test1'
     id = field.PrimaryKey(storetype.Integer(), name='id2')
     name = field.Column(storetype.Text(max_length=30), name='name')
     test1 = rel.ManyToMany('Test2', name='test1_id')
-
-    def __init__(self):
-        super().__init__()
 
 
 class Test2(Entity):
@@ -61,12 +48,13 @@ m.create_tables()
 
 
 
-# # simple example for insert, update, delete
-# p._first_name = "12345"
-# p._second_name = "second"
+# simple example for insert, update, delete
+p = Person()
+p._first_name = "12345"
+p._second_name = "second"
 # m.insert(p)
-# # p._second_name = "secondsecond"
-# # m.update(p)
+# p._second_name = "secondsecond"
+# m.update(p)
 # m.delete(p)
 #
 # p2.id = 1
@@ -75,4 +63,10 @@ m.create_tables()
 # # p2.name ="upadtename"
 # # m.update(p2)
 # m.delete(p2)
+
+ad = Address()
+ad.xd = "aaaa"
+ad.cos = "12345"
+# m.insert(ad)
+# m.delete(ad)
 m.close()

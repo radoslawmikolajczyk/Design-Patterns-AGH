@@ -8,7 +8,7 @@ from connection.database import DatabaseConnection
 from entity.entity import Entity
 from collections import defaultdict
 from connection.query import QueryResult
-from fields.relationship import OneToOne, OneToMany, ManyToMany
+from fields.relationship import OneToOne, ManyToOne, ManyToMany, Relationship
 
 from fields.field import Column, PrimaryKey
 import builders.ddl as ddl
@@ -55,7 +55,7 @@ class Manager(metaclass=SingletonMeta):
                             has_primary_key = True
                         if value.unique:
                             builder.unique(value.name)
-                    if isinstance(value, OneToOne) or isinstance(value, OneToMany):
+                    if isinstance(value, OneToOne) or isinstance(value, ManyToOne):
                         foreign_key = self.__get_o_relation(value.other)
                         builder.field(value.name, foreign_key[2])
                         if isinstance(value, OneToOne):
@@ -70,6 +70,10 @@ class Manager(metaclass=SingletonMeta):
                 self.__database_connection.commit(builder.build(), 'CREATE TABLE')
             for build in self.__junction_tables:
                 self.__database_connection.commit(build, 'CREATE JUNCTION TABLE')
+            print(self.__all_data)
+            print(self.__class_names)
+            print(self.__junction_tables)
+            print(self.__junction_tables_names)
         else:
             print("CREATE A CONNECTION TO DATABASE!")
 
@@ -85,8 +89,8 @@ class Manager(metaclass=SingletonMeta):
                 return value
 
     def __create_junction_table(self, first_table, second_table, first_field_name, second_field_name):
-        table_name = first_table+"_"+second_table
-        reversed_name = second_table+"_"+first_table
+        table_name = first_table + "_" + second_table
+        reversed_name = second_table + "_" + first_table
 
         if table_name not in self.__junction_tables and reversed_name not in self.__junction_tables_names:
             first_fk = self._find_primary_key_of_table(first_table)
@@ -120,13 +124,15 @@ class Manager(metaclass=SingletonMeta):
     def insert(self, entity: Entity):
         table_name = self._get_table_name(entity)
         types, names = self._find_names_and_types_of_columns(table_name)
-
         builder = InsertBuilder().into(table_name)
         for field_name in types.keys():
             store_type = types[field_name]
             column_name = names[field_name]
             value = getattr(entity, field_name)
-            builder.add(column_name, store_type, value)
+            if not isinstance(value, Column) and \
+               not isinstance(value, PrimaryKey) and \
+               not isinstance(value, Relationship):
+                builder.add(column_name, store_type, value)
 
         self._execute_query(builder.build(), 'INSERT')
 
@@ -232,6 +238,8 @@ class Manager(metaclass=SingletonMeta):
         if entity._table_name is not "":
             table_name = entity._table_name
         else:
+            if isinstance(entity, Entity):
+                entity = type(entity)
             table_name = entity.__name__.lower()
         return table_name
 
@@ -243,6 +251,18 @@ class Manager(metaclass=SingletonMeta):
         for field_name, field_object in fields:
             if isinstance(field_object, Column) or isinstance(field_object, PrimaryKey):
                 types[field_name] = field_object.type
+                names[field_name] = field_object.name
+            else:  # object is a relation
+                # we need to find a primary key of the table to which relationship is
+                # in order to find the type of the field
+
+                entity = self.__class_names.get(field_object.other)
+                table_name = self._get_table_name(entity)
+                primary_key = self._find_primary_key_of_table(table_name)
+                assert primary_key is not None
+                _, _, primary_key_type = primary_key
+
+                types[field_name] = primary_key_type
                 names[field_name] = field_object.name
 
         return types, names
