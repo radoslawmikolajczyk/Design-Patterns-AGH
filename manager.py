@@ -109,7 +109,7 @@ class Manager(metaclass=SingletonMeta):
             builder.foreign_key(second_field_name.name, first_table, first_fk[1],
                                 on_update=DDLConstraintAction.CASCADE,
                                 on_delete=DDLConstraintAction.CASCADE)
-
+            builder.unique([first_field_name.name, second_field_name.name])
             self.__junction_tables_names.append(table_name)
             self.__junction_tables.append(builder.build())
             print(builder.build())
