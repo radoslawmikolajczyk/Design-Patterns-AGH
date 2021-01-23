@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from builders.ddl import DDLBuilder, DDLPrimaryKeyBuildable, DDLForeignKeyBuildable, DDLUniqueBuildable, DDLBuildable, DDLField
+from builders.ddl import DDLBuilder, DDLPrimaryKeyBuildable, DDLForeignKeyBuildable, DDLUniqueBuildable, DDLBuildable, DDLField, DDLConstraintAction
 from fields.storetype import Text, Integer, Float, TimeStamp
 
 
@@ -14,11 +14,11 @@ class TestDDLBuilder(TestCase):
             .field("c", Float(), False) \
             .field("d", TimeStamp()) \
             .primary_key("id") \
-            .foreign_key("b", "B", "id") \
-            .unique("a")
+            .foreign_key("b", "B", "id", on_update=DDLConstraintAction.CASCADE) \
+            .unique(["a","b"])
 
         self.assertRegex(builder.build(),
-                         r'CREATE TABLE IF NOT EXISTS "A" \("id" INTEGER, "a" VARCHAR\(255\), "b" INTEGER, "c" NUMERIC NOT NULL, "d" TIMESTAMP, PRIMARY KEY\("id"\), CONSTRAINT fk_[A-Za-z0-9]{6} FOREIGN KEY\("b"\) REFERENCES "B"\("id"\), CONSTRAINT uk_[A-Za-z0-9]{6} UNIQUE \("a"\)\)')
+                         r'CREATE TABLE IF NOT EXISTS "A" \("id" INTEGER, "a" VARCHAR\(255\), "b" INTEGER, "c" NUMERIC NOT NULL, "d" TIMESTAMP, PRIMARY KEY\("id"\), CONSTRAINT fk_[A-Za-z0-9]{6} FOREIGN KEY\("b"\) REFERENCES "B"\("id"\) ON UPDATE CASCADE, CONSTRAINT uk_[A-Za-z0-9]{6} UNIQUE \("a","b"\)\)')
 
     def test_override_name(self):
         builder = DDLBuilder() \
@@ -92,14 +92,36 @@ class TestDDLBuilder(TestCase):
         self.assertEqual(constraint.build(), 'PRIMARY KEY("a")')
 
     def test_foreign_key_constraint(self):
-        constraint = DDLForeignKeyBuildable("a", "B", "b")
+        constraint = DDLForeignKeyBuildable("a", "B", "b", None, None)
 
         self.assertRegex(constraint.build(), r'CONSTRAINT fk_[A-Za-z0-9]{6} FOREIGN KEY\("a"\) REFERENCES "B"\("b"\)')
 
+    def test_foreign_key_constraint_on_update(self):
+        constraint = DDLForeignKeyBuildable("a", "B", "b", DDLConstraintAction.CASCADE, None)
+
+        self.assertRegex(constraint.build(), r'CONSTRAINT fk_[A-Za-z0-9]{6} FOREIGN KEY\("a"\) REFERENCES "B"\("b"\) ON UPDATE CASCADE')
+
+    def test_foreign_key_constraint_on_delete(self):
+        constraint = DDLForeignKeyBuildable("a", "B", "b", None, DDLConstraintAction.CASCADE)
+
+        self.assertRegex(constraint.build(),
+                         r'CONSTRAINT fk_[A-Za-z0-9]{6} FOREIGN KEY\("a"\) REFERENCES "B"\("b"\) ON DELETE CASCADE')
+
+    def test_foreign_key_constraint_on_delete_on_update(self):
+        constraint = DDLForeignKeyBuildable("a", "B", "b", DDLConstraintAction.CASCADE, DDLConstraintAction.CASCADE)
+
+        self.assertRegex(constraint.build(),
+                         r'CONSTRAINT fk_[A-Za-z0-9]{6} FOREIGN KEY\("a"\) REFERENCES "B"\("b"\) ON UPDATE CASCADE ON DELETE CASCADE')
+
     def test_unique_constraint(self):
         constraint = DDLUniqueBuildable("a")
-        print(constraint.build())
+
         self.assertRegex(constraint.build(), r'CONSTRAINT uk_[A-Za-z0-9]{6} UNIQUE \("a"\)')
+
+    def test_multi_unique_constraint(self):
+        constraint = DDLUniqueBuildable(["a","b"])
+
+        self.assertRegex(constraint.build(), r'CONSTRAINT uk_[A-Za-z0-9]{6} UNIQUE \("a","b"\)')
 
     def test_base_buildable(self):
         constraint = DDLBuildable()
