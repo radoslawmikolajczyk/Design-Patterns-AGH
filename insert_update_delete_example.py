@@ -100,7 +100,7 @@ film2.title = "title2"
 film2.actor_fk = [1, 2]
 
 
-# TEST 1 ######################## simple many to one relation with update ##################################
+# EXAMPLE 1 ######################## simple many to one relation with update ##################################
 
 m.insert(p)
 m.insert(a1)
@@ -114,7 +114,7 @@ m.delete(a1)
 m.delete(a2)
 m.delete(p)
 
-# TEST 2 ######################### simple one to one relation ##############################################
+# EXAMPLE 2 ######################### simple one to one relation ##############################################
 
 # executing the following code (inserting c2 object) should cause ERROR -> and so it is :)
 # c2 = City()
@@ -132,14 +132,14 @@ m.delete(c)
 m.delete(a1)
 m.delete(p)
 
-# TEST 3 ########################## simple multi insert #####################################################
+# EXAMPLE 3 ########################## simple multi insert #####################################################
 
 m.multi_insert([p, a1, c])
 m.delete(c)
 m.delete(a1)
 m.delete(p)
 
-# TEST 4 ########################## simple multi insert for many to many relation ###########################
+# EXAMPLE 4 ########################## simple multi insert for many to many relation ###########################
 
 m.multi_insert([actor1, actor2, film1, film2])
 m.delete(actor1)
