@@ -25,13 +25,16 @@ class DDLForeignKeyBuildable(DDLBuildable):
 
 
 class DDLUniqueBuildable(DDLBuildable):
-    __name: str
+    __name: List[str]
 
-    def __init__(self, name: str):
-        self.__name = quote_database_object_name_unsafe(name)
+    def __init__(self, name: Union[str,List[str]]):
+        if isinstance(name, list):
+            self.__name = [*map(quote_database_object_name_unsafe, name)]
+        else:
+            self.__name = [quote_database_object_name_unsafe(name)]
 
     def build(self):
-        return f"CONSTRAINT uk_{generate_escape_seq()} UNIQUE ({self.__name})"
+        return f"CONSTRAINT uk_{generate_escape_seq()} UNIQUE ({','.join(self.__name)})"
 
 
 class DDLPrimaryKeyBuildable(DDLBuildable):
@@ -89,7 +92,7 @@ class DDLBuilder:
         self.__constraints.append(DDLForeignKeyBuildable(name, other_table, other_name))
         return self
 
-    def unique(self, name: str) -> 'DDLBuilder':
+    def unique(self, name: Union[str,List[str]]) -> 'DDLBuilder':
         self.__constraints.append(DDLUniqueBuildable(name))
         return self
 

@@ -15,10 +15,10 @@ class TestDDLBuilder(TestCase):
             .field("d", TimeStamp()) \
             .primary_key("id") \
             .foreign_key("b", "B", "id") \
-            .unique("a")
+            .unique(["a","b"])
 
         self.assertRegex(builder.build(),
-                         r'CREATE TABLE IF NOT EXISTS "A" \("id" INTEGER, "a" VARCHAR\(255\), "b" INTEGER, "c" NUMERIC NOT NULL, "d" TIMESTAMP, PRIMARY KEY\("id"\), CONSTRAINT fk_[A-Za-z0-9]{6} FOREIGN KEY\("b"\) REFERENCES "B"\("id"\), CONSTRAINT uk_[A-Za-z0-9]{6} UNIQUE \("a"\)\)')
+                         r'CREATE TABLE IF NOT EXISTS "A" \("id" INTEGER, "a" VARCHAR\(255\), "b" INTEGER, "c" NUMERIC NOT NULL, "d" TIMESTAMP, PRIMARY KEY\("id"\), CONSTRAINT fk_[A-Za-z0-9]{6} FOREIGN KEY\("b"\) REFERENCES "B"\("id"\), CONSTRAINT uk_[A-Za-z0-9]{6} UNIQUE \("a","b"\)\)')
 
     def test_override_name(self):
         builder = DDLBuilder() \
@@ -98,8 +98,13 @@ class TestDDLBuilder(TestCase):
 
     def test_unique_constraint(self):
         constraint = DDLUniqueBuildable("a")
-        print(constraint.build())
+
         self.assertRegex(constraint.build(), r'CONSTRAINT uk_[A-Za-z0-9]{6} UNIQUE \("a"\)')
+
+    def test_multi_unique_constraint(self):
+        constraint = DDLUniqueBuildable(["a","b"])
+
+        self.assertRegex(constraint.build(), r'CONSTRAINT uk_[A-Za-z0-9]{6} UNIQUE \("a","b"\)')
 
     def test_base_buildable(self):
         constraint = DDLBuildable()
