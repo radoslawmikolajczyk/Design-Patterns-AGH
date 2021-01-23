@@ -2,6 +2,7 @@ from builders.delete import DeleteBuilder
 from builders.insert import InsertBuilder
 from builders.update import UpdateBuilder
 from builders.select import SelectBuilder
+from builders.ddl import DDLConstraintAction
 
 from connection.configuration import ConnectionConfiguration
 from connection.database import DatabaseConnection
@@ -61,7 +62,9 @@ class Manager(metaclass=SingletonMeta):
                         if isinstance(value, OneToOne):
                             builder.unique(value.name)  # Because it is one to one relation
                         foreign_table = self._get_table_name(self.__class_names.get(value.other))
-                        builder.foreign_key(value.name, foreign_table, foreign_key[1])
+                        builder.foreign_key(value.name, foreign_table, foreign_key[1],
+                                            on_update=DDLConstraintAction.CASCADE,
+                                            on_delete=DDLConstraintAction.CASCADE)
                     if isinstance(value, ManyToMany):
                         second_table = self._get_table_name(self.__class_names.get(value.other))
                         second_value = self.__find_many_to_many_relation_value(second_table)
@@ -100,8 +103,12 @@ class Manager(metaclass=SingletonMeta):
             builder.name(table_name)
             builder.field(first_field_name.name, first_fk[2], False)
             builder.field(second_field_name.name, second_fk[2], False)
-            builder.foreign_key(first_field_name.name, second_table, second_fk[1])
-            builder.foreign_key(second_field_name.name, first_table, first_fk[1])
+            builder.foreign_key(first_field_name.name, second_table, second_fk[1],
+                                on_update=DDLConstraintAction.CASCADE,
+                                on_delete=DDLConstraintAction.CASCADE)
+            builder.foreign_key(second_field_name.name, first_table, first_fk[1],
+                                on_update=DDLConstraintAction.CASCADE,
+                                on_delete=DDLConstraintAction.CASCADE)
 
             self.__junction_tables_names.append(table_name)
             self.__junction_tables.append(builder.build())
