@@ -10,17 +10,25 @@ from manager import Manager
 # WARNING: these classes are different from the ones in create_tables_example.py
 # so in order to run this file without any errors you should drop schema first
 
+'''
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+'''
+
 ############################################################################################
+
 
 class Person(Entity):
     # _table_name = 'osoba'
     _first_name = field.Column(storetype.Text(max_length=30), name="first_name")
     _second_name = field.Column(storetype.Text(max_length=80), name="second_name")
 
+
 class Address(Entity):
     # _table_name = 'adres'
     id = field.Column(storetype.Text(max_length=30), name='id', unique=True, nullable=False)
     person_fk = rel.ManyToOne('Person', "person_fk")
+
 
 class City(Address):
     _table_name = 'miasto'
@@ -29,12 +37,28 @@ class City(Address):
     address_fk = rel.OneToOne('Address', name='address_fk')
 
 
+class Actor(Entity):
+    id = field.PrimaryKey(storetype.Integer(), name='id')
+    name = field.Column(storetype.Text(max_length=30), name='name')
+    film_fk = rel.ManyToMany('Film', name='film_fk')
+
+
+class Film(Entity):
+    id = field.PrimaryKey(storetype.Integer(), name='id')
+    title = field.Column(storetype.Text(max_length=30), name='title')
+    actor_fk = rel.ManyToMany('Actor', name='actor_fk')
+
+
+# CONFIGURATION
+
 m = Manager()
 conf = ConnectionConfiguration(user="postgres",
                                password="rajka1001",
                                database="postgres")
 m.connect(conf)
 m.create_tables()
+
+# OBJECTS
 
 p = Person()
 p._first_name = "person1"
@@ -48,15 +72,41 @@ a2 = Address()
 a2.id = "b"
 a2.person_fk = "person1"
 
+c = City()
+c.id = 1
+c.name = "New York"
+c.address_fk = 'a'
 
-# TEST 1 ##########################################################
+actor1 = Actor()
+actor2 = Actor()
+
+film1 = Film()
+film2 = Film()
+
+actor1.id = 1
+actor1.name = "name1"
+actor1.film_fk = [1, 2]
+
+actor2.id = 2
+actor2.name = "name2"
+actor2.film_fk = [1, 2]
+
+film1.id = 1
+film1.title = "title1"
+film1.actor_fk = [1, 2]
+
+film2.id = 2
+film2.title = "title2"
+film2.actor_fk = [1, 2]
+
+
+# TEST 1 ######################## simple many to one relation with update ##################################
 
 m.insert(p)
 m.insert(a1)
 m.insert(a2)
 
-# TODO: implement functionality allowing to update the primary key of a table
-#       when it is used as foreign key in other tables
+# TODO: PrimaryKey update not working
 # p._first_name = "changeId"
 # m.update(p)
 
@@ -64,13 +114,7 @@ m.delete(a1)
 m.delete(a2)
 m.delete(p)
 
-
-# TEST 2 ##########################################################
-
-c = City()
-c.id = 1
-c.name = "New York"
-c.address_fk = 'a'
+# TEST 2 ######################### simple one to one relation ##############################################
 
 # executing the following code (inserting c2 object) should cause ERROR -> and so it is :)
 # c2 = City()
@@ -88,5 +132,19 @@ m.delete(c)
 m.delete(a1)
 m.delete(p)
 
+# TEST 3 ########################## simple multi insert #####################################################
+
+m.multi_insert([p, a1, c])
+m.delete(c)
+m.delete(a1)
+m.delete(p)
+
+# TEST 4 ########################## simple multi insert for many to many relation ###########################
+
+m.multi_insert([actor1, actor2, film1, film2])
+m.delete(actor1)
+m.delete(actor2)
+m.delete(film1)
+m.delete(film2)
 
 m.close()
