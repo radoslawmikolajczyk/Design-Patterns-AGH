@@ -1,3 +1,5 @@
+from typing import List
+
 from builders.delete import DeleteBuilder
 from builders.insert import InsertBuilder
 from builders.update import UpdateBuilder
@@ -128,6 +130,50 @@ class Manager(metaclass=SingletonMeta):
         self.__database_connection.close()
         self.__is_connected = False
 
+    def multi_insert(self, entities: List[Entity]):
+        for entity in entities:
+            self.insert(entity)
+        for entity in entities:
+            table_name = self._get_table_name(entity)
+            fields = self.__all_data[table_name].items()
+            for field_name, field_object in fields:
+                if isinstance(field_object, ManyToMany):
+                    first_primary_key = self._find_primary_key_of_table(table_name)
+                    second_entity = self.__class_names.get(field_object.other)
+                    second_table = self._get_table_name(second_entity)
+                    second_primary_key = self._find_primary_key_of_table(second_table)
+
+                    assert first_primary_key is not None
+                    assert second_primary_key is not None
+
+                    first_pk_field_name, _, first_pk_type = first_primary_key
+                    first_pk_value = getattr(entity, first_pk_field_name)
+                    # print(first_pk_value)
+                    second_pk_field_name, _, second_pk_type = second_primary_key
+                    second_pk_values = getattr(entity, field_name)
+                    # print(second_pk_values)
+
+                    second_fk_name = field_object.name
+                    first_fk_name = ""
+
+                    second_fields = self.__all_data[second_table].items()
+                    for _, s_field_object in second_fields:
+                        if isinstance(s_field_object, ManyToMany):
+                            first_fk_name = s_field_object.name
+
+                    junction_table_name = table_name + '_' + second_table
+                    if junction_table_name not in self.__junction_tables_names:
+                        junction_table_name = second_table + '_' + table_name
+
+                    for second_value in second_pk_values:
+                        builder = InsertBuilder().into(junction_table_name)
+                        # print(first_fk_name, first_pk_type, first_pk_value)
+                        builder.add(first_fk_name, first_pk_type, first_pk_value)
+                        # print(second_fk_name, second_pk_type, second_value)
+                        builder.add(second_fk_name, second_pk_type, second_value)
+                        self._execute_query(builder.build(), 'INSERT')
+
+
     def insert(self, entity: Entity):
         table_name = self._get_table_name(entity)
         types, names = self._find_names_and_types_of_columns(table_name)
@@ -136,6 +182,8 @@ class Manager(metaclass=SingletonMeta):
             store_type = types[field_name]
             column_name = names[field_name]
             value = getattr(entity, field_name)
+
+            # case for values that are not already assigned (NULL)
             if not isinstance(value, Column) and \
                not isinstance(value, PrimaryKey) and \
                not isinstance(value, Relationship):
@@ -259,7 +307,7 @@ class Manager(metaclass=SingletonMeta):
             if isinstance(field_object, Column) or isinstance(field_object, PrimaryKey):
                 types[field_name] = field_object.type
                 names[field_name] = field_object.name
-            else:  # object is a relation
+            elif isinstance(field_object, ManyToOne) or isinstance(field_object, OneToOne):  # object is a relation
                 # we need to find a primary key of the table to which relationship is
                 # in order to find the type of the field
 
