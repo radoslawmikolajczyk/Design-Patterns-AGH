@@ -1,5 +1,5 @@
 class Field:
-    pass
+    name = 'DEFAULT'
 
 
 class Column(Field):
@@ -19,11 +19,12 @@ class Column(Field):
             initializes object with the given attributes
     """
 
-    def __init__(self, column_type, nullable=True, unique=False, name="DEFAULT"):
+    def __init__(self, column_type, nullable=True, unique=False, name=Field.name):
         self.type = column_type
         self.nullable = nullable
         self.unique = unique
         self.name = name
+
 
 class PrimaryKey(Field):
     """
@@ -39,6 +40,7 @@ class PrimaryKey(Field):
         __init__(self, column_type, name="DEFAULT"):
             initializes object with the given attributes
     """
-    def __init__(self, column_type, name="DEFAULT"):
+
+    def __init__(self, column_type, name=Field.name):
         self.type = column_type
         self.name = name

@@ -20,16 +20,16 @@ class Address(Entity):
 
 class City(Address):
     _table_name = 'city1'
-    id = field.PrimaryKey(storetype.Integer(), name='id')
+    city_id = field.PrimaryKey(storetype.Integer())
     name = field.Column(storetype.Text(max_length=30), name='name')
     address = rel.OneToOne('Address', name='address_id')
 
 
 class Test(Entity):
     _table_name = 'test1'
-    id = field.PrimaryKey(storetype.Integer(), name='id2')
-    name = field.Column(storetype.Text(max_length=30), name='name')
-    test1 = rel.ManyToMany('Test2', name='test1_id')
+    test_id = field.PrimaryKey(storetype.Integer())
+    name = field.Column(storetype.Text(max_length=30))
+    test1_id = rel.ManyToMany('Test2')
 
 
 class Test2(Entity):

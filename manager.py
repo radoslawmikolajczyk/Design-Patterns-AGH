@@ -13,7 +13,7 @@ from collections import defaultdict
 from connection.query import QueryResult
 from fields.relationship import OneToOne, ManyToOne, ManyToMany, Relationship
 
-from fields.field import Column, PrimaryKey
+from fields.field import Column, PrimaryKey, Field
 import builders.ddl as ddl
 
 from copy import deepcopy
@@ -38,6 +38,7 @@ class Manager(metaclass=SingletonMeta):
         self.__all_data, self.__class_names = self.__get_all_instances(Entity)
         self.__junction_tables = []
         self.__junction_tables_names = []
+        print(self.__all_data)
 
     def create_tables(self):
         if self.__is_connected:
@@ -47,6 +48,7 @@ class Manager(metaclass=SingletonMeta):
                 name = list(self.__all_data.keys())[i]
                 builder.name(name)
                 for key, value in self.__all_data[name].items():
+                    value.name = self.__get_column_name(value, key)
                     if isinstance(value, PrimaryKey):
                         builder.field(value.name, value.type, False)
                         builder.primary_key(value.name)
@@ -92,6 +94,12 @@ class Manager(metaclass=SingletonMeta):
         for key, value in self.__all_data[table_name].items():
             if isinstance(value, ManyToMany):
                 return value
+
+    def __get_column_name(self, field, field_name):
+        if field.name == Field.name:
+            return field_name
+        else:
+            return field.name
 
     def __create_junction_table(self, first_table, second_table, first_field_name, second_field_name):
         table_name = first_table + "_" + second_table
