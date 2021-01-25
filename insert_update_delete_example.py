@@ -21,7 +21,7 @@ CREATE SCHEMA public;
 class Person(Entity):
     # _table_name = 'osoba'
     _first_name = field.Column(storetype.Text(max_length=30), name="first_name")
-    _second_name = field.Column(storetype.Text(max_length=80), name="second_name")
+    _second_name = field.Column(storetype.Text(max_length=80))
 
 
 class Address(Entity):
@@ -141,7 +141,7 @@ m.delete(c)
 m.delete(a1)
 m.delete(p)
 
-# EXAMPLE 4 ########################## simple multi insert for many to many relation ###########################
+# EXAMPLE 4 ########################## simple multi insert for ManyToMany relation ###########################
 
 m.multi_insert([actor1, actor2, film1, film2])
 
@@ -153,7 +153,7 @@ m.delete(actor2)
 m.delete(film1)
 m.delete(film2)
 
-# EXAMPLE 5 ########################## update ###########################
+# EXAMPLE 5 ########################## update (with some NULL fields) ###########################################
 
 city = City()
 city.id = 1
@@ -162,6 +162,8 @@ city.name = "New York"
 m.insert(city)
 m.update(city)
 m.delete(city)
+
+# EXAMPLE 6 ########################## multiple ManyToMany relations ###########################################
 
 
 m.close()

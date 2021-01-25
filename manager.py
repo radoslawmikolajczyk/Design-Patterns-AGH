@@ -96,7 +96,7 @@ class Manager(metaclass=SingletonMeta):
                 return value
 
     def __get_column_name(self, field, field_name):
-        if field.name == Field.name:
+        if field.name == Field.default_name:
             return field_name
         else:
             return field.name
@@ -160,10 +160,7 @@ class Manager(metaclass=SingletonMeta):
 
                     second_fk_field_name, _, second_fk_type = second_fk
                     second_fk_values = getattr(entity, field_name)
-                    if field_object.name is 'DEFAULT':
-                        second_fk_name = field_name
-                    else:
-                        second_fk_name = field_object.name
+                    second_fk_name = self.__get_column_name(field_object, field_name)
 
                     junction_table_name = self._find_name_of_junction_table(table_name, second_table_name)
 
@@ -180,9 +177,7 @@ class Manager(metaclass=SingletonMeta):
         second_fields = self.__all_data[second_table_name].items()
         for s_field_name, s_field_object in second_fields:
             if isinstance(s_field_object, ManyToMany):
-                first_fk_name = s_field_object.name
-                if first_fk_name is 'DEFAULT':
-                    first_fk_name = s_field_name
+                first_fk_name = self.__get_column_name(s_field_object, s_field_name)
 
         assert first_fk_name is not None
         return first_fk_name
@@ -331,10 +326,7 @@ class Manager(metaclass=SingletonMeta):
                 primary_key_type = self._find_type_of_primary_key_of_relation(field_object.other)
                 types[field_name] = primary_key_type
 
-            if field_object.name is 'DEFAULT':
-                names[field_name] = field_name
-            else:
-                names[field_name] = field_object.name
+            names[field_name] = self.__get_column_name(field_object, field_name)
 
         return types, names
 
@@ -343,21 +335,14 @@ class Manager(metaclass=SingletonMeta):
 
         for field_name, field_object in fields:
             if isinstance(field_object, PrimaryKey):
-                if field_object.name is 'DEFAULT':
-                    column_name = field_name
-                else:
-                    column_name = field_object.name
-
+                column_name = self.__get_column_name(field_object, field_name)
                 primary_key = [field_name, column_name, field_object.type]
                 return primary_key
 
         # if we don't find the primary key field, the primary key is the first column
         for field_name, field_object in fields:
             if isinstance(field_object, Column):
-                if field_object.name is 'DEFAULT':
-                    column_name = field_name
-                else:
-                    column_name = field_object.name
+                column_name = self.__get_column_name(field_object, field_name)
                 primary_key = [field_name, column_name, field_object.type]
                 return primary_key
 

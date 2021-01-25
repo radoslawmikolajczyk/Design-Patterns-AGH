@@ -17,15 +17,15 @@ class Relationship(Field):
 
 
 class OneToOne(Relationship):
-    def __init__(self, other, name=Field.name):
+    def __init__(self, other, name=Field.default_name):
         super().__init__(other, name)
 
 
 class ManyToOne(Relationship):
-    def __init__(self, other, name=Field.name):
+    def __init__(self, other, name=Field.default_name):
         super().__init__(other, name)
 
 
 class ManyToMany(Relationship):
-    def __init__(self, other, name=Field.name):
+    def __init__(self, other, name=Field.default_name):
         super().__init__(other, name)
