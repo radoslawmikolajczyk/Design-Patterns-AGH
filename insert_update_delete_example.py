@@ -106,9 +106,8 @@ m.insert(p)
 m.insert(a1)
 m.insert(a2)
 
-# TODO: PrimaryKey update not working
-# p._first_name = "changeId"
-# m.update(p)
+p._first_name = "changedFK"
+m.update(p)
 
 m.delete(a1)
 m.delete(a2)
@@ -121,6 +120,8 @@ m.delete(p)
 # c2.id = 2
 # c2.name = "London"
 # c2.address_fk = 'a'
+
+a1.person_fk = "changedFK"
 
 m.insert(p)
 m.insert(a1)
@@ -142,6 +143,10 @@ m.delete(p)
 # EXAMPLE 4 ########################## simple multi insert for many to many relation ###########################
 
 m.multi_insert([actor1, actor2, film1, film2])
+
+film2.id = 222
+m.update(film2)
+
 m.delete(actor1)
 m.delete(actor2)
 m.delete(film1)

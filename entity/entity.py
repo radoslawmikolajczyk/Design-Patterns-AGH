@@ -13,3 +13,7 @@ class Entity:
     """
 
     _table_name = ""
+    _primary_key = None
+
+    def get_primary_key(self):
+        return self._primary_key

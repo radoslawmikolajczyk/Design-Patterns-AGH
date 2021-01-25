@@ -177,6 +177,14 @@ class Manager(metaclass=SingletonMeta):
     def insert(self, entity: Entity):
         table_name = self._get_table_name(entity)
         types, names = self._find_names_and_types_of_columns(table_name)
+
+        # we need to store the value of primary_key in order to use it when primary key is updated
+        primary_key = self._find_primary_key_of_table(table_name)
+        assert primary_key is not None
+        primary_key_field_name, _, _ = primary_key
+        primary_key_value = getattr(entity, primary_key_field_name)
+        entity._primary_key = primary_key_value
+
         builder = InsertBuilder().into(table_name)
         for field_name in types.keys():
             store_type = types[field_name]
@@ -209,7 +217,8 @@ class Manager(metaclass=SingletonMeta):
         primary_key = self._find_primary_key_of_table(table_name)
         assert primary_key is not None
         primary_key_field_name, primary_key_name, primary_key_type = primary_key
-        primary_key_value = getattr(entity, primary_key_field_name)
+        primary_key_value = entity.get_primary_key()
+        entity._primary_key = getattr(entity, primary_key_field_name)
 
         builder = UpdateBuilder().table(table_name)
         for field_name in types.keys():
