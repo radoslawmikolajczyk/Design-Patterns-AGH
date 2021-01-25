@@ -135,6 +135,7 @@ m.delete(p)
 
 # EXAMPLE 3 ########################## simple multi insert #####################################################
 
+# multi insert is used for inserting objects with many to many relation
 m.multi_insert([p, a1, c])
 m.delete(c)
 m.delete(a1)
@@ -151,5 +152,16 @@ m.delete(actor1)
 m.delete(actor2)
 m.delete(film1)
 m.delete(film2)
+
+# EXAMPLE 5 ########################## update ###########################
+
+city = City()
+city.id = 1
+city.name = "New York"
+
+m.insert(city)
+m.update(city)
+m.delete(city)
+
 
 m.close()

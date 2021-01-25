@@ -11,6 +11,7 @@ class Person(Entity):
     _first_name = field.Column(storetype.Text(max_length=30), name="first_name")
     _second_name = field.Column(storetype.Text(max_length=80), name="second_name")
 
+
 class Address(Entity):
     # _table_name = 'address'
     xd = field.Column(storetype.Text(max_length=30), name='xd2', unique=True, nullable=False)
