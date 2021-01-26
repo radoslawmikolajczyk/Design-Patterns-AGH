@@ -49,6 +49,25 @@ class Film(Entity):
     actor_fk = rel.ManyToMany('Actor', name='actor_fk')
 
 
+class Book(Entity):
+    id = field.PrimaryKey(storetype.Integer(), name='id')
+    title = field.Column(storetype.Text(max_length=30), name='title')
+    author_fk = rel.ManyToMany('Author', name='author_fk')
+
+
+class Author(Entity):
+    id = field.PrimaryKey(storetype.Integer(), name='id')
+    name = field.Column(storetype.Text(max_length=30), name='name')
+    book_fk = rel.ManyToMany('Book', name='book_fk')
+    poem_fk = rel.ManyToMany('Poem')
+
+
+class Poem(Entity):
+    id = field.PrimaryKey(storetype.Integer(), name='id')
+    title = field.Column(storetype.Text(max_length=30), name='title')
+    author_fk = rel.ManyToMany('Author', name='author_fk')
+
+
 # CONFIGURATION
 
 m = Manager()
@@ -164,6 +183,47 @@ m.update(city)
 m.delete(city)
 
 # EXAMPLE 6 ########################## multiple ManyToMany relations ###########################################
+
+b1 = Book()
+b2 = Book()
+a1 = Author()
+a2 = Author()
+p1 = Poem()
+p2 = Poem()
+
+b1.id = 1
+b1.title = "btitle1"
+b1.author_fk = [1]
+
+b2.id = 2
+b2.title = "btitle2"
+b2.author_fk = [1]
+
+p1.id = 1
+p1.title = "ptitle1"
+p1.author_fk = [1, 2]
+
+p2.id = 2
+p2.title = "ptitle2"
+p2.author_fk = [1, 2]
+
+a1.id = 1
+a1.name = "name1"
+a1.book_fk = [1, 2]
+a1.poem_fk = [1, 2]
+
+a2.id = 2
+a2.name = "name2"
+a2.poem_fk = [1, 2]
+
+m.multi_insert([b1, b2, a1, a2, p1, p2])
+m.delete(a1)
+m.delete(a2)
+m.delete(b1)
+m.delete(b2)
+m.delete(p1)
+m.delete(p2)
+
 
 
 m.close()

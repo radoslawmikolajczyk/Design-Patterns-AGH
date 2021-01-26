@@ -156,7 +156,8 @@ class Manager(metaclass=SingletonMeta):
 
                     first_fk_field_name, _, first_fk_type = first_fk
                     first_fk_value = getattr(entity, first_fk_field_name)
-                    first_fk_name = self._find_name_of_first_fk_column(second_table_name)
+                    class_name = type(entity).__name__
+                    first_fk_name = self._find_name_of_first_fk_column(class_name, second_table_name)
 
                     second_fk_field_name, _, second_fk_type = second_fk
                     second_fk_values = getattr(entity, field_name)
@@ -164,19 +165,20 @@ class Manager(metaclass=SingletonMeta):
 
                     junction_table_name = self._find_name_of_junction_table(table_name, second_table_name)
 
-                    for second_value in second_fk_values:
-                        builder = InsertBuilder().into(junction_table_name)
-                        builder.add(first_fk_name, first_fk_type, first_fk_value)
-                        builder.add(second_fk_name, second_fk_type, second_value)
-                        self._execute_query(builder.build(), 'INSERT')
+                    if not isinstance(second_fk_values, ManyToMany):
+                        for second_value in second_fk_values:
+                            builder = InsertBuilder().into(junction_table_name)
+                            builder.add(first_fk_name, first_fk_type, first_fk_value)
+                            builder.add(second_fk_name, second_fk_type, second_value)
+                            self._execute_query(builder.build(), 'INSERT')
 
                     break
 
-    def _find_name_of_first_fk_column(self, second_table_name):
+    def _find_name_of_first_fk_column(self, class_name, second_table_name):
         first_fk_name = None
         second_fields = self.__all_data[second_table_name].items()
         for s_field_name, s_field_object in second_fields:
-            if isinstance(s_field_object, ManyToMany):
+            if isinstance(s_field_object, ManyToMany) and s_field_object.other == class_name:
                 first_fk_name = self.__get_column_name(s_field_object, s_field_name)
 
         assert first_fk_name is not None
