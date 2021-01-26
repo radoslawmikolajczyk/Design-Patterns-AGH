@@ -21,16 +21,15 @@ class StoreType:
     def __init__(self):
         self._python_type = ""
         self._database_type = ""
-        self.nullable = False
 
     def parse(self):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def serialize(self, data):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def definition(self):
-        raise NotImplemented()
+        raise NotImplementedError()
 
 
 class Text(StoreType):

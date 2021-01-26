@@ -11,5 +11,9 @@ class Entity:
         __init__(self, name):
             initializes object with the given attributes
     """
-    def __init__(self, name):
-        self._table_name = name
+
+    _table_name = ""
+    _primary_key = None
+
+    def get_primary_key(self):
+        return self._primary_key

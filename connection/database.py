@@ -2,18 +2,10 @@ import psycopg2
 from .configuration import ConnectionConfiguration
 from .query import QueryResult
 
+class DatabaseConnection:
 
-class SingletonMeta(type):
-    _instances = {}
-
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            instance = super().__call__(*args, **kwargs)
-            cls._instances[cls] = instance
-        return cls._instances[cls]
-
-
-class DatabaseConnection(metaclass=SingletonMeta):
+    def __init__(self):
+        self.is_connected = False
 
     def configure(self, conf: ConnectionConfiguration):
         self.__configuration = conf
@@ -25,8 +17,17 @@ class DatabaseConnection(metaclass=SingletonMeta):
             self.cursor.execute(query)
             result.change_query(self.cursor.fetchall())
         except Exception as error:
-            print("Error while executing to database", error)
+            print("Error while querying to database: ", error)
         return result
+
+    def commit(self, query: str, query_type: str = 'QUERY'):
+        try:
+            self.cursor = self.connection.cursor()
+            self.cursor.execute(query)
+            self.connection.commit()
+            print(query_type, ' was successful: ', query)
+        except Exception as error:
+            self.cursor.execute("ROLLBACK")
 
     def connect(self):
         try:
@@ -37,11 +38,14 @@ class DatabaseConnection(metaclass=SingletonMeta):
                 port=self.__configuration.port,
                 database=self.__configuration.database
             )
+            self.is_connected = True
         except Exception as error:
             print("Error while connecting to PostgreSQL", error)
 
     def close(self):
-        if self.connection:
+        if self.is_connected:
             self.cursor.close()
             self.connection.close()
             print("PostgreSQL connection is closed")
+        else:
+            print("There is no connection to database")
