@@ -249,6 +249,7 @@ class Manager(metaclass=SingletonMeta):
     def find_by(self, model: Entity, key_name: str, key_value):
         table_name = self._get_table_name(model)
         types, names = self._find_names_and_types_of_columns(table_name)
+        id_field_name, _, _ = self._find_primary_key_of_table(table_name)
         builder = SelectBuilder().table(table_name)
         for field_name in types.keys():
             builder.add(table_name, names[field_name])
@@ -272,8 +273,8 @@ class Manager(metaclass=SingletonMeta):
             if table_name in junction_table_name:
                 junction_query = self.__junction_tables[index]
                 junction_query = junction_query.split(" ")
-                for part in junction_query:
-                    if 'KEY' in part and table_name in part:
+                for part_index, part in enumerate(junction_query):
+                    if 'KEY' in part and table_name in junction_query[part_index+2]:
                         junction_key = part.split('"')[1]
                         junction_data.append((junction_table_name, junction_key))
         return junction_data
@@ -344,13 +345,15 @@ class Manager(metaclass=SingletonMeta):
                     elif in_dict != field and not isinstance(in_dict, list):
                         setattr(aggregate[record_pk], list(field_names)[j], [in_dict, field])
                     elif in_dict != field and isinstance(in_dict, list):
-                        setattr(aggregate[record_pk], list(field_names)[j], in_dict.append(field))
+                        new = in_dict
+                        new.append(field)
+                        setattr(aggregate[record_pk], list(field_names)[j], new)
                 else:
                     # if we add the mapped object to dict this way we essentialy have a dict like
                     # {primary_key_value: pointer_to_object_in_mapped_list}
                     aggregate[record_pk] = mapped[i]
 
-        return mapped
+        return list(aggregate.values())
 
     def _is_field(self, field_value: str):
         return isinstance(field_value, Column) or isinstance(field_value, PrimaryKey) or\

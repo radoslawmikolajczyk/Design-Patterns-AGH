@@ -149,7 +149,7 @@ film2.id = 222
 m.update(film2)
 
 found = Actor()
-found = m.find_by_id(found, 1)
+m.find_by_id(found, 1)
 
 m.delete(actor1)
 m.delete(actor2)
