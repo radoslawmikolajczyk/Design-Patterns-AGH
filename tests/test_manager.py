@@ -1,6 +1,7 @@
 from entity.entity import Entity
 import fields.field as field
 import fields.storetype as storetype
+import fields.relationship as rel
 from connection.configuration import ConnectionConfiguration
 from manager import Manager
 from copy import deepcopy
@@ -24,7 +25,6 @@ class TestFindByIdInt(unittest.TestCase):
                                     database="postgres")
         cls.m.connect(conf)
         cls.m.create_tables()
-        cls.records = []
 
         entity = City()
         cls.records = []
@@ -85,7 +85,6 @@ class TestFindByIdStr(unittest.TestCase):
                                     database="postgres")
         cls.m.connect(conf)
         cls.m.create_tables()
-        cls.records = []
 
         entity = Person()
         cls.records = []
@@ -148,7 +147,6 @@ class TestFindByIdCustomPk(unittest.TestCase):
                                     database="postgres")
         cls.m.connect(conf)
         cls.m.create_tables()
-        cls.records = []
 
         entity = Vehicle()
         cls.records = []
@@ -194,6 +192,146 @@ class TestFindByIdCustomPk(unittest.TestCase):
     def test_wrong_id_type(self):
         self.assertRaises(AssertionError, self.m.find_by_id, self.record, 1)
 
+
+class Address(Entity):
+    _table_name = 'address_manager_test'
+    id = field.Column(storetype.Text(max_length=30), name='id', unique=True, nullable=False)
+    person_fk = rel.ManyToOne('Person', "person_fk")
+
+
+class TestFindByIdManyToOne(unittest.TestCase):
+    # Executed before all tests in this class
+    @classmethod
+    def setUpClass(cls):
+        cls.m = Manager()
+        conf = ConnectionConfiguration(user="postgres",
+                                    password="rajka1001",
+                                    database="postgres")
+        cls.m.connect(conf)
+        cls.m.create_tables()
+
+        entity = Person()
+        cls.person_records = []
+
+        for i in range(0,5):
+            cls.person_records.append(deepcopy(entity))
+            cls.person_records[i].first_name = "First " + str(i)
+            cls.person_records[i].second_name = "SECOND " + str(i)
+            cls.m.insert(cls.person_records[i])
+        
+        entity = Address()
+        cls.address_records = []
+
+        for i in range(0,5):
+            cls.address_records.append(deepcopy(entity))
+            cls.address_records[i].id = str(i)
+            if i % 2 == 0:
+                cls.address_records[i].person_fk = "SECOND " + str(i)
+            else:
+                cls.address_records[i].person_fk = "SECOND " + str(i-1)
+            cls.m.insert(cls.address_records[i])
+
+    # Executed after all tests from this class
+    @classmethod
+    def tearDownClass(cls):
+        for record in cls.person_records:
+            cls.m.delete(record)
+        for record in cls.address_records:
+            cls.m.delete(record)
+
+        cls.m.close()
+
+    # Executed before every test from this class
+    def setUp(self):
+        self.record = Address()
+
+    # Executed after every test from this class
+    def tearDown(self):
+        self.record = None
+
+    def testForeignKey(self):
+        self.record = self.m.find_by_id(self.record, "3")
+        self.assertEqual(self.record.person_fk, "SECOND 2")
+        self.record = self.m.find_by_id(self.record, "2")
+        self.assertEqual(self.record.person_fk, "SECOND 2")
+
+
+# class Actor(Entity):
+#     _table_name = 'actor_manager_test'
+#     id = field.PrimaryKey(storetype.Integer(), name='id')
+#     name = field.Column(storetype.Text(max_length=30), name='name')
+#     film_fk = rel.ManyToMany('Film', name='film_fk')
+
+
+# class Film(Entity):
+#     _table_name = 'film_manager_test'
+#     id = field.PrimaryKey(storetype.Integer(), name='id')
+#     title = field.Column(storetype.Text(max_length=30), name='title')
+#     actor_fk = rel.ManyToMany('Actor', name='actor_fk')
+
+
+# class TestFindByIdManyToMany(unittest.TestCase):
+#     # Executed before all tests in this class
+#     @classmethod
+#     def setUpClass(cls):
+#         cls.m = Manager()
+#         conf = ConnectionConfiguration(user="postgres",
+#                                     password="rajka1001",
+#                                     database="postgres")
+#         cls.m.connect(conf)
+#         cls.m.create_tables()
+        
+#         entity = Film()
+#         film_records = []
+
+#         for i in range(0,5):
+#             film_records.append(deepcopy(entity))
+#             film_records[i].id = i
+#             film_records[i].title = 'Film ' + str(i)
+#             if i == 0:
+#                 film_records[i].actor_fk = [i]
+#             else:
+#                 film_records[i].actor_fk = [i, i-1]
+
+#         entity = Actor()
+#         actor_records = []
+
+#         for i in range(0,5):
+#             actor_records.append(deepcopy(entity))
+#             actor_records[i].id = i
+#             actor_records[i].name = 'Actor ' + str(i)
+#             if i == 0:
+#                 actor_records[i].film_fk = [i]
+#             else:
+#                 actor_records[i].film_fk = [i, i-1]
+        
+#         cls.records = []
+#         for i in film_records:
+#             cls.records.append(deepcopy(i))
+#         for i in actor_records:
+#             cls.records.append(deepcopy(i))
+        
+#         m.multi_insert(cls.records)
+
+#     # Executed after all tests from this class
+#     @classmethod
+#     def tearDownClass(cls):
+#         for record in cls.records:
+#             cls.m.delete(record)
+
+#         cls.m.close()
+
+#     # Executed before every test from this class
+#     def setUp(self):
+#         self.record = Actor()
+
+#     # Executed after every test from this class
+#     def tearDown(self):
+#         self.record = None
+
+#     def testForeignKey(self):
+#         self.record = self.m.find_by_id(self.record, 3)
+#         self.assertEqual(self.record.film_fk, [3, 2])
 
 
 if __name__ == '__main__':
