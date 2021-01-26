@@ -239,9 +239,16 @@ class Manager(metaclass=SingletonMeta):
 
     def find_by_id(self, model: Entity, id):
         table_name = self._get_table_name(model)
-        id_field_name, id_column_name, id_type = self._find_primary_key_of_table(table_name)
-        types, names = self._find_names_and_types_of_columns(table_name)
+        id_field_name, _, _ = self._find_primary_key_of_table(table_name)
+        result = self.find_by(model, id_field_name, id)
+        try:
+            return result[0]
+        except IndexError:  # Didn't find anything
+            return None
 
+    def find_by(self, model: Entity, key_name: str, key_value):
+        table_name = self._get_table_name(model)
+        types, names = self._find_names_and_types_of_columns(table_name)
         builder = SelectBuilder().table(table_name)
         for field_name in types.keys():
             builder.add(table_name, names[field_name])
@@ -254,14 +261,10 @@ class Manager(metaclass=SingletonMeta):
             other = self.__find_many_to_many_relation_value(table_name)
             builder.add(junction_table_name, other.name)
         
-        builder.where(id_column_name, id_type, id)
+        builder.where(names[key_name], types[key_name], key_value)
         query, fields = builder.build()
 
-        result = self.select(model, query)
-        try:
-            return result[0]
-        except IndexError:  # Didn't find anything
-            return None
+        return self.select(model, query)
 
     def _get_junction_data(self, table_name: str):
         junction_data = []
