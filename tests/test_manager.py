@@ -334,5 +334,72 @@ class TestFindByIdManyToOne(unittest.TestCase):
 #         self.assertEqual(self.record.film_fk, [3, 2])
 
 
+class Vehicle(Entity):
+    _table_name = 'vehicle_manager_test'
+    model = field.Column(storetype.Text(max_length=80), name="second_name")
+    make = field.Column(storetype.Text(max_length=30), name="first_name")
+    engine_volume = field.PrimaryKey(storetype.Float(), name='engine_volume')
+
+    def __init__(self):
+        super().__init__()
+
+class TestFindBy(unittest.TestCase):
+    # Executed before all tests in this class
+    @classmethod
+    def setUpClass(cls):
+        cls.m = Manager()
+        conf = ConnectionConfiguration(user="postgres",
+                                    password="rajka1001",
+                                    database="postgres")
+        cls.m.connect(conf)
+        cls.m.create_tables()
+
+        entity = Vehicle()
+        cls.records = []
+
+        for i in range(0,10):
+            cls.records.append(deepcopy(entity))
+            cls.records[i].model = "Model " + str(i)
+            cls.records[i].make = "Tesla"
+            cls.records[i].engine_volume = i + 2.5
+            cls.m.insert(cls.records[i])
+
+    # Executed after all tests from this class
+    @classmethod
+    def tearDownClass(cls):
+        for record in cls.records:
+            cls.m.delete(record)
+
+        cls.m.close()
+
+    # Executed before every test from this class
+    def setUp(self):
+        self.record = Vehicle()
+
+    # Executed after every test from this class
+    def tearDown(self):
+        self.record = None
+
+    def test_unique_field(self):
+        self.record = self.m.find_by(self.record, 'model', 'Model 1')
+        self.assertEqual(len(self.record), 1)
+        correct = Vehicle()
+        correct.model = "Model 1"
+        correct.make = "Tesla"
+        correct.engine_volume = 3.5
+        self.assertEqual(self.record[0].model, correct.model)
+        self.assertEqual(self.record[0].make, correct.make)
+        self.assertEqual(self.record[0].engine_volume, correct.engine_volume)
+
+    def test_value_not_exists(self):
+        self.record = self.m.find_by(self.record, 'model', 'Model 131414511')
+        self.assertEqual(len(self.record), 0)
+        self.assertEqual(self.record, [])
+    
+    def test_multiple_matches(self):
+        self.record = self.m.find_by(self.record, 'make', 'Tesla')
+        self.assertEqual(len(self.record), 10)
+
+
 if __name__ == '__main__':
     unittest.main()
