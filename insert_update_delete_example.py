@@ -167,6 +167,9 @@ m.multi_insert([actor1, actor2, film1, film2])
 film2.id = 222
 m.update(film2)
 
+found = Actor()
+m.find_by_id(found, 1)
+
 m.delete(actor1)
 m.delete(actor2)
 m.delete(film1)

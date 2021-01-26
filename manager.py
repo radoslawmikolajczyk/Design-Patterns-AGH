@@ -241,19 +241,45 @@ class Manager(metaclass=SingletonMeta):
 
     def find_by_id(self, model: Entity, id):
         table_name = self._get_table_name(model)
-        id_name, _, id_type = self._find_primary_key_of_table(table_name)
-        _, names = self._find_names_and_types_of_columns(table_name)
-
-        builder = SelectBuilder().table(table_name)
-        for field_name in names.keys():
-            column_name = names[field_name]
-            builder.add(table_name, column_name)
-        builder.where(id_name, id_type, id)
-        query, fields = builder.build()
+        id_field_name, _, _ = self._find_primary_key_of_table(table_name)
+        result = self.find_by(model, id_field_name, id)
         try:
-            return self.select(model, query)[0]
+            return result[0]
         except IndexError:  # Didn't find anything
             return None
+
+    def find_by(self, model: Entity, key_name: str, key_value):
+        table_name = self._get_table_name(model)
+        types, names = self._find_names_and_types_of_columns(table_name)
+        id_field_name, _, _ = self._find_primary_key_of_table(table_name)
+        builder = SelectBuilder().table(table_name)
+        for field_name in types.keys():
+            builder.add(table_name, names[field_name])
+        
+        junction_data = self._get_junction_data(table_name)
+        for i in junction_data:
+            junction_table_name, junction_key = i
+            builder.join(junction_table_name, junction_key, table_name, id_field_name)
+            
+            other = self.__find_many_to_many_relation_value(table_name)
+            builder.add(junction_table_name, other.name)
+        
+        builder.where(names[key_name], types[key_name], key_value)
+        query, fields = builder.build()
+
+        return self.select(model, query)
+
+    def _get_junction_data(self, table_name: str):
+        junction_data = []
+        for index, junction_table_name in enumerate(self.__junction_tables_names):
+            if table_name in junction_table_name:
+                junction_query = self.__junction_tables[index]
+                junction_query = junction_query.split(" ")
+                for part_index, part in enumerate(junction_query):
+                    if 'KEY' in part and table_name in junction_query[part_index+2]:
+                        junction_key = part.split('"')[1]
+                        junction_data.append((junction_table_name, junction_key))
+        return junction_data
 
     def select(self, model: Entity, query: str) -> list:
         if self.__is_connected:
@@ -300,12 +326,41 @@ class Manager(metaclass=SingletonMeta):
         return tables, class_names
 
     def __map_result_fields(self, model: Entity, field_names: [str], query_result: QueryResult):
+        table_name = self._get_table_name(model)
+        pk_field_name, pk_column_name, pk_type = self._find_primary_key_of_table(table_name)
+        aggregate = {}
         records = query_result.get_query()
         mapped = [deepcopy(model) for _ in records]
+
+        pk_index = list(field_names).index(pk_field_name)
+
         for i, record in enumerate(records):
             for j, field in enumerate(record):
                 setattr(mapped[i], list(field_names)[j], field)
-        return mapped
+                record_pk = record[pk_index]
+                if record_pk in aggregate:
+                    in_dict = getattr(aggregate[record_pk], list(field_names)[j])
+                    if self._is_field(in_dict):
+                        # this also changes the object in mapped list, because of the way we
+                        # added this item to the dict
+                        setattr(aggregate[record_pk], list(field_names)[j], field)
+                    elif in_dict != field and not isinstance(in_dict, list):
+                        setattr(aggregate[record_pk], list(field_names)[j], [in_dict, field])
+                    elif in_dict != field and isinstance(in_dict, list):
+                        new = in_dict
+                        new.append(field)
+                        setattr(aggregate[record_pk], list(field_names)[j], new)
+                else:
+                    # if we add the mapped object to dict this way we essentialy have a dict like
+                    # {primary_key_value: pointer_to_object_in_mapped_list}
+                    aggregate[record_pk] = mapped[i]
+
+        return list(aggregate.values())
+
+    def _is_field(self, field_value: str):
+        return isinstance(field_value, Column) or isinstance(field_value, PrimaryKey) or\
+         isinstance(field_value, ManyToOne) or isinstance(field_value, OneToOne) or \
+         isinstance(field_value, ManyToMany)
 
     def _get_table_name(self, entity: Entity):
         if entity._table_name is not "":
