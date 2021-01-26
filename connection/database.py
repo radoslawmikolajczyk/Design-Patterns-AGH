@@ -27,7 +27,6 @@ class DatabaseConnection:
             self.connection.commit()
             print(query_type, ' was successful: ', query)
         except Exception as error:
-            print("Error while executing to database: ", error)
             self.cursor.execute("ROLLBACK")
 
     def connect(self):
