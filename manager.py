@@ -38,7 +38,9 @@ class Manager(metaclass=SingletonMeta):
         self.__all_data, self.__class_names = self.__get_all_instances(Entity)
         self.__junction_tables = []
         self.__junction_tables_names = []
-        print(self.__all_data)
+        # self.__class_inheritance -- dict for all classes (without Entity) which inherit,
+        # ex. { <class '__main__.Address'> : [<class '__main__.City'>, <class '__main__.Street'>]}
+        self.__class_inheritance = {}
 
     def create_tables(self):
         if self.__is_connected:
@@ -255,16 +257,16 @@ class Manager(metaclass=SingletonMeta):
         builder = SelectBuilder().table(table_name)
         for field_name in types.keys():
             builder.add(table_name, names[field_name])
-        
+
         junction_data = self._get_junction_data(table_name)
         other = self.__find_many_to_many_other_fk_name(table_name)
 
         for index, data in enumerate(junction_data):
             junction_table_name, junction_key = data
             builder.join(junction_table_name, junction_key, table_name, id_field_name)
-            
+
             builder.add(junction_table_name, other[index].name)
-        
+
         builder.where(names[key_name], types[key_name], key_value)
         query, fields = builder.build()
         return self.select(model, query)
@@ -276,12 +278,11 @@ class Manager(metaclass=SingletonMeta):
                 junction_query = self.__junction_tables[index]
                 junction_query = junction_query.split(" ")
                 for part_index, part in enumerate(junction_query):
-                    if 'KEY' in part and table_name in junction_query[part_index+2]:
+                    if 'KEY' in part and table_name in junction_query[part_index + 2]:
                         junction_key = part.split('"')[1]
                         junction_data.append((junction_table_name, junction_key))
         return junction_data
 
-    
     def __find_many_to_many_other_fk_name(self, table_name):
         names = []
         for key, value in self.__all_data[table_name].items():
@@ -334,9 +335,9 @@ class Manager(metaclass=SingletonMeta):
         return list(aggregate.values())
 
     def _is_column(self, field_value: str):
-        return isinstance(field_value, Column) or isinstance(field_value, PrimaryKey) or\
-         isinstance(field_value, ManyToOne) or isinstance(field_value, OneToOne) or \
-         isinstance(field_value, ManyToMany)
+        return isinstance(field_value, Column) or isinstance(field_value, PrimaryKey) or \
+               isinstance(field_value, ManyToOne) or isinstance(field_value, OneToOne) or \
+               isinstance(field_value, ManyToMany)
 
     def __all_subclasses(self, cls):
         all_subclasses = []
@@ -429,3 +430,17 @@ class Manager(metaclass=SingletonMeta):
             self.__database_connection.commit(query, query_type)
         else:
             print("CREATE A CONNECTION TO DATABASE!")
+
+    def _has_inheritance(self, cls):
+        inheritance_list = []
+        for key, value in self.__class_names.items():
+            if isinstance(cls, value) and value != type(cls):
+                inheritance_list.append(value)
+        if len(inheritance_list) > 0:
+            self.__class_inheritance[type(cls)] = inheritance_list
+            return True
+        return False
+
+    # logic for class table inheritance, query_type: UPDATE, INSERT, DELETE, SELECT, cls: Entity obj
+    def _create_join(self, query_type: str, cls):
+        pass
