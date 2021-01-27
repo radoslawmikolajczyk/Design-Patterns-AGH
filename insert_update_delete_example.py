@@ -128,11 +128,18 @@ m.insert(a2)
 p._first_name = "changedFK"
 m.update(p)
 
-updated = Person()
-updated = m.find_by_id(updated, "changedFK")
-m.insert(updated)
-updated._second_name = "From findby"
-m.update(updated)
+to_update = Person()
+to_update = m.find_by_id(to_update, "changedFK")
+m.insert(to_update)
+to_update._second_name = "From findby"
+m.update(to_update)
+
+selected = m.select(Address(), "SELECT * FROM address")
+print("\nSelect found: ", selected)
+
+for i in selected:
+    print("Address id:", i.id, "; It's an address of person with first name:", i.person_fk)
+print("\n")
 
 m.delete(a1)
 m.delete(a2)
@@ -223,6 +230,15 @@ a2.name = "name2"
 a2.poem_fk = [1, 2]
 
 m.multi_insert([b1, b2, a1, a2, p1, p2])
+
+find = Author()
+find = m.find_by(find, 'name', 'name1')
+print("\nFound authors: ", find)
+found = find[0]
+print("I found this author: Name:", found.name, "; Books:", found.book_fk, "; Poems:", found.poem_fk, "\n")
+found.name = "Changed"
+m.update(found)
+
 m.delete(a1)
 m.delete(a2)
 m.delete(b1)

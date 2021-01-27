@@ -16,6 +16,7 @@ class DatabaseConnection:
             self.cursor = self.connection.cursor()
             self.cursor.execute(query)
             result.change_query(self.cursor.fetchall())
+            print('SELECT was successful: ', query)
         except Exception as error:
             print("Error while querying to database: ", error)
         return result
