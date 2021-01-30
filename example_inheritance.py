@@ -6,13 +6,19 @@ from connection.configuration import ConnectionConfiguration
 from manager import Manager
 
 
-class City(Entity):
+class Country(Entity):
+    _table_name = 'panstwo'
+    country_name = field.Column(storetype.Text(max_length=30))
+
+
+class City(Country):
     _table_name = 'miasto'
-    city_name = field.Column(storetype.Text(max_length=30))
+    city_name = field.Column(storetype.Text(max_length=30), name="city_name")
 
 
 class Address(City):
-    address_id = field.Column(storetype.Text(max_length=30), unique=True, nullable=False)
+    _table_name = 'address'
+    address_id = field.Column(storetype.Text(max_length=30), unique=True, nullable=False, name='addr_id')
     street_name = field.Column(storetype.Text(max_length=80))
     home_nr = field.Column(storetype.Integer(), name='home_nr')
 
@@ -23,9 +29,6 @@ conf = ConnectionConfiguration(user="postgres",
                                database="postgres")
 m.connect(conf)
 a = Address()
-a2 = Address()
-
-print(a.city_name)
-print(a2.city_name)
-
-
+a.address_id = "Ulica Czarnowiejska"
+a.country_name = "Polska"
+a.city_name = "Kraków"
