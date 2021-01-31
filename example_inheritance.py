@@ -32,3 +32,5 @@ a = Address()
 a.address_id = "Ulica Czarnowiejska"
 a.country_name = "Polska"
 a.city_name = "Kraków"
+
+m.get_inheritance_data(a)

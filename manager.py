@@ -41,6 +41,7 @@ class Manager(metaclass=SingletonMeta):
         # self.__class_inheritance -- dict for all classes (without Entity) which inherit,
         # ex. { <class '__main__.Address'> : [<class '__main__.City'>, <class '__main__.Street'>]}
         self.__class_inheritance = {}
+        print(self.__all_data)
 
     # create table for a given class
     def create_table(self, entity: Entity):
@@ -457,7 +458,7 @@ class Manager(metaclass=SingletonMeta):
         { nazwa_tabeli_rodzic1 : { nazwa_kolumny: wartosc_wprowadzona_przez_uzytk }, nazwa_tabeli_rodzic2 : {...}, nazwa_tabeli_dziecko: {} }
         Mozna ten slownik juz bezposrednio obsluzyc w operacjach ddl,
     '''
-    def _get_inheritance_data(self, cls):
+    def get_inheritance_data(self, cls):
         if self._has_inheritance(cls):
             # pobieramy wszystkie wartosci z obiektu (w tym tez te z klas parent)
             all_values = [i for i in dir(cls) if
@@ -474,10 +475,10 @@ class Manager(metaclass=SingletonMeta):
             table_name = self._get_table_name(cls)
             for k, v in self.__all_data[table_name].items():
                 if k in all_values:
-                    own_values[self.__get_column_name(v, k)] = getattr(cls, k)
+                    own_values[k] = getattr(cls, k)
 
             grouped_values[table_name] = own_values
-
+            print(grouped_values)
             return grouped_values
         return None
 
@@ -501,7 +502,7 @@ class Manager(metaclass=SingletonMeta):
                 if k in array:
                     var = getattr(cls, array[array.index(k)])
                     if var:
-                        new_dict[self.__get_column_name(v, k)] = var
+                        new_dict[k] = var
 
         del parent_objects
         return parent_dictionary
