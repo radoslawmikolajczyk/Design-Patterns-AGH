@@ -41,16 +41,15 @@ class Manager(metaclass=SingletonMeta):
         # self.__class_inheritance -- dict for all classes (without Entity) which inherit,
         # ex. { <class '__main__.Address'> : [<class '__main__.City'>, <class '__main__.Street'>]}
         self.__class_inheritance = {}
-        print(self.__all_data)
 
     # create table for a given class
     def create_table(self, entity: Entity):
         table_name = self._get_table_name(entity)
         values_from_all_data = self.__all_data[table_name]
         data = {table_name: values_from_all_data}
-        self._create_tables_mapper(data)
+        self.__create_tables_mapper(data)
 
-    def _create_tables_mapper(self, data):
+    def __create_tables_mapper(self, data):
         if self.__is_connected:
             for i in range(len(data)):
                 builder = ddl.DDLBuilder()
@@ -87,15 +86,11 @@ class Manager(metaclass=SingletonMeta):
                 self.__database_connection.commit(builder.build(), 'CREATE TABLE')
             for build in self.__junction_tables:
                 self.__database_connection.commit(build, 'CREATE JUNCTION TABLE')
-            print(self.__all_data)
-            print(self.__class_names)
-            print(self.__junction_tables)
-            print(self.__junction_tables_names)
         else:
             print("CREATE A CONNECTION TO DATABASE!")
 
     def create_tables(self):
-        self._create_tables_mapper(self.__all_data)
+        self.__create_tables_mapper(self.__all_data)
 
     # OneToOne and OneToMany relations
     def __get_o_relation(self, entity_name):
@@ -205,10 +200,12 @@ class Manager(metaclass=SingletonMeta):
         return junction_table_name
 
     def _execute_sql_function(self, entity: Entity, query_type: str):
+
         table_name = self._get_table_name(entity)
 
         primary_key = self._find_primary_key_of_table(table_name)
         assert primary_key is not None
+        print(primary_key)
         primary_key_field_name, primary_key_name, primary_key_type = primary_key
         primary_key_value = getattr(entity, primary_key_field_name)
         primary_key_saved_value = entity.get_primary_key()
@@ -239,18 +236,41 @@ class Manager(metaclass=SingletonMeta):
                     builder.add(column_name, store_type, value)
 
         if query_type in ('UPDATE', 'DELETE'):
+            print(type(primary_key_name), type(primary_key_type), type(primary_key_saved_value))
             builder.where(primary_key_name, primary_key_type, primary_key_saved_value)
 
         self._execute_query(builder.build(), query_type)
 
+    def __inheritance_ins_del_upd(self, entity, query_type):
+        data = self.get_inheritance_data(entity)
+        classes = self.__class_inheritance[type(entity)]
+        parent_entities = [i() for i in classes]
+        parent_entities.append(entity)
+        for i in range(len(parent_entities)):
+            var_names = data.get(self._get_table_name(parent_entities[i]))
+            if var_names != {}:
+                for k, v in var_names.items():
+                    setattr(parent_entities[i], k, v)
+                self._execute_sql_function(parent_entities[i], query_type)
+        del parent_entities
+
     def insert(self, entity: Entity):
-        self._execute_sql_function(entity, 'INSERT')
+        if self._has_inheritance(entity):
+            self.__inheritance_ins_del_upd(entity, 'INSERT')
+        else:
+            self._execute_sql_function(entity, 'INSERT')
 
     def delete(self, entity: Entity):
-        self._execute_sql_function(entity, 'DELETE')
+        if self._has_inheritance(entity):
+            self.__inheritance_ins_del_upd(entity, 'DELETE')
+        else:
+            self._execute_sql_function(entity, 'DELETE')
 
     def update(self, entity: Entity):
-        self._execute_sql_function(entity, 'UPDATE')
+        if self._has_inheritance(entity):
+            self.__inheritance_ins_del_upd(entity, 'UPDATE')
+        else:
+            self._execute_sql_function(entity, 'UPDATE')
 
     def find_by_id(self, model: Entity, id):
         table_name = self._get_table_name(model)
@@ -458,6 +478,7 @@ class Manager(metaclass=SingletonMeta):
         { nazwa_tabeli_rodzic1 : { nazwa_kolumny: wartosc_wprowadzona_przez_uzytk }, nazwa_tabeli_rodzic2 : {...}, nazwa_tabeli_dziecko: {} }
         Mozna ten slownik juz bezposrednio obsluzyc w operacjach ddl,
     '''
+
     def get_inheritance_data(self, cls):
         if self._has_inheritance(cls):
             # pobieramy wszystkie wartosci z obiektu (w tym tez te z klas parent)
@@ -471,14 +492,12 @@ class Manager(metaclass=SingletonMeta):
             grouped_values = self._find_parent_values(all_values, cls)
             own_values = {}
 
-            print(all_values)
             table_name = self._get_table_name(cls)
             for k, v in self.__all_data[table_name].items():
                 if k in all_values:
                     own_values[k] = getattr(cls, k)
 
             grouped_values[table_name] = own_values
-            print(grouped_values)
             return grouped_values
         return None
 

@@ -8,11 +8,13 @@ from manager import Manager
 
 class Country(Entity):
     _table_name = 'panstwo'
+    country_id = field.PrimaryKey(storetype.Integer())
     country_name = field.Column(storetype.Text(max_length=30))
 
 
 class City(Country):
     _table_name = 'miasto'
+    city_id = field.PrimaryKey(storetype.Integer())
     city_name = field.Column(storetype.Text(max_length=30), name="city_name")
 
 
@@ -28,9 +30,19 @@ conf = ConnectionConfiguration(user="postgres",
                                password="rajka1001",
                                database="postgres")
 m.connect(conf)
+m.create_tables()
 a = Address()
+a.country_id = 1
+a.city_id = 1
 a.address_id = "Ulica Czarnowiejska"
 a.country_name = "Polska"
 a.city_name = "Kraków"
 
-m.get_inheritance_data(a)
+m.insert(a)
+
+a.country_name = 'Niemcy'
+a.city_name = 'Berlin'
+a.address_id = 'Friedrichstraße'
+
+m.update(a)
+m.delete(a)

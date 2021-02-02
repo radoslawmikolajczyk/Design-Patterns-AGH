@@ -2,6 +2,7 @@ import psycopg2
 from .configuration import ConnectionConfiguration
 from .query import QueryResult
 
+
 class DatabaseConnection:
 
     def __init__(self):
