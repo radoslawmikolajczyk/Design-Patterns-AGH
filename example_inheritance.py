@@ -40,4 +40,4 @@ a.country_name = "Polska"
 a.city_name = "Kraków"
 
 
-m.split_inheritance_data(a)
+

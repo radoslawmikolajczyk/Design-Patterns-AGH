@@ -44,7 +44,7 @@ class Manager(metaclass=SingletonMeta):
         self.__class_inheritance = {}
 
         # { adres_obiektu: { nazwa_pola : wartosc, ... }}
-        self._object_stack = dict()
+        self.__object_stack = dict()
 
     # create table for a given class
     def create_table(self, entity: Entity):
@@ -456,7 +456,7 @@ class Manager(metaclass=SingletonMeta):
             return True
         return False
 
-    def split_inheritance_data(self, cls):
+    def __split_inheritance_data(self, cls):
         if self._has_inheritance(cls):
             all_values = [i for i in dir(cls) if
                           not i.startswith('__') and not i.endswith('__') and i not in dir(Entity)]
@@ -464,6 +464,7 @@ class Manager(metaclass=SingletonMeta):
 
             grouped_values = self.__group_inheritance_values(all_values, cls)
             return grouped_values
+        return None
 
     def __group_inheritance_values(self, values, cls):
         grouped_values = dict()
@@ -483,3 +484,9 @@ class Manager(metaclass=SingletonMeta):
         grouped_values[child_table_name] = child_values
 
         return grouped_values
+
+    def __append_update_stack(self, obj):
+        self.__object_stack[obj] = obj.__dict__
+
+    def __del_obj_from_stack(self, obj):
+        del self.__object_stack[obj]
