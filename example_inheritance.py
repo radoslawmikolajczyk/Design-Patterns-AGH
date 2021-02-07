@@ -30,19 +30,14 @@ conf = ConnectionConfiguration(user="postgres",
                                password="rajka1001",
                                database="postgres")
 m.connect(conf)
-m.create_tables()
+
 a = Address()
+
 a.country_id = 1
 a.city_id = 1
 a.address_id = "Ulica Czarnowiejska"
 a.country_name = "Polska"
 a.city_name = "Kraków"
 
-m.insert(a)
 
-a.country_name = 'Niemcy'
-a.city_name = 'Berlin'
-a.address_id = 'Friedrichstraße'
-
-m.update(a)
-m.delete(a)
+m.split_inheritance_data(a)

@@ -35,12 +35,16 @@ class Manager(metaclass=SingletonMeta):
         self.__is_connected = False
         self.__database_connection = DatabaseConnection()
         # get all table names from all classes which inherit from Entity
-        self.__all_data, self.__class_names = self.__get_all_instances(Entity)
+        # __class_table_dict to slownik np. { <class '__main__.Address'> : _table_name, ... }
+        self.__all_data, self.__class_names, self.__class_table_dict = self.__get_all_instances(Entity)
         self.__junction_tables = []
         self.__junction_tables_names = []
         # self.__class_inheritance -- dict for all classes (without Entity) which inherit,
         # ex. { <class '__main__.Address'> : [<class '__main__.City'>, <class '__main__.Street'>]}
         self.__class_inheritance = {}
+
+        # { adres_obiektu: { nazwa_pola : wartosc, ... }}
+        self._object_stack = dict()
 
     # create table for a given class
     def create_table(self, entity: Entity):
@@ -241,36 +245,14 @@ class Manager(metaclass=SingletonMeta):
 
         self._execute_query(builder.build(), query_type)
 
-    def __inheritance_ins_del_upd(self, entity, query_type):
-        data = self.get_inheritance_data(entity)
-        classes = self.__class_inheritance[type(entity)]
-        parent_entities = [i() for i in classes]
-        parent_entities.append(entity)
-        for i in range(len(parent_entities)):
-            var_names = data.get(self._get_table_name(parent_entities[i]))
-            if var_names != {}:
-                for k, v in var_names.items():
-                    setattr(parent_entities[i], k, v)
-                self._execute_sql_function(parent_entities[i], query_type)
-        del parent_entities
-
     def insert(self, entity: Entity):
-        if self._has_inheritance(entity):
-            self.__inheritance_ins_del_upd(entity, 'INSERT')
-        else:
-            self._execute_sql_function(entity, 'INSERT')
+        self._execute_sql_function(entity, 'INSERT')
 
     def delete(self, entity: Entity):
-        if self._has_inheritance(entity):
-            self.__inheritance_ins_del_upd(entity, 'DELETE')
-        else:
-            self._execute_sql_function(entity, 'DELETE')
+        self._execute_sql_function(entity, 'DELETE')
 
     def update(self, entity: Entity):
-        if self._has_inheritance(entity):
-            self.__inheritance_ins_del_upd(entity, 'UPDATE')
-        else:
-            self._execute_sql_function(entity, 'UPDATE')
+        self._execute_sql_function(entity, 'UPDATE')
 
     def find_by_id(self, model: Entity, id):
         table_name = self._get_table_name(model)
@@ -383,6 +365,7 @@ class Manager(metaclass=SingletonMeta):
         cls = self.__all_subclasses(cls)
         tables = dict()
         class_names = dict()
+        class_tables = dict()
         for subclass in cls:
 
             values = subclass.__dict__
@@ -401,7 +384,8 @@ class Manager(metaclass=SingletonMeta):
 
             tables[t_name] = new_dict
             class_names[subclass.__name__] = subclass
-        return tables, class_names
+            class_tables[subclass] = t_name
+        return tables, class_names, class_tables
 
     def _get_table_name(self, entity: Entity):
         if entity._table_name is not "":
@@ -472,56 +456,30 @@ class Manager(metaclass=SingletonMeta):
             return True
         return False
 
-    '''
-        Do funkcji przekazujemy obiekt i robimy skan po wszystkich co dziedziczy (jesli dziedziczy ofc), 
-        funkcja zwraca nam slownik (jesli dane entity dziedziczy po czyms, inaczej zwraca None) w formacie:
-        { nazwa_tabeli_rodzic1 : { nazwa_kolumny: wartosc_wprowadzona_przez_uzytk }, nazwa_tabeli_rodzic2 : {...}, nazwa_tabeli_dziecko: {} }
-        Mozna ten slownik juz bezposrednio obsluzyc w operacjach ddl,
-    '''
-
-    def get_inheritance_data(self, cls):
+    def split_inheritance_data(self, cls):
         if self._has_inheritance(cls):
-            # pobieramy wszystkie wartosci z obiektu (w tym tez te z klas parent)
             all_values = [i for i in dir(cls) if
                           not i.startswith('__') and not i.endswith('__') and i not in dir(Entity)]
-            # sprawdzamy czy wartosci sa typu Field, jesli sa to skip. Bierzemy tylko to co jest uzywane
             all_values = [i for i in all_values if not isinstance(getattr(cls, i), Field)]
 
-            # wartosci to slownik, w formacie { nazwa_tabeli: {nazwa_pola : wartosc(JUZ NIE COLUMN, tylko np
-            # string), itd..}}
-            grouped_values = self._find_parent_values(all_values, cls)
-            own_values = {}
-
-            table_name = self._get_table_name(cls)
-            for k, v in self.__all_data[table_name].items():
-                if k in all_values:
-                    own_values[k] = getattr(cls, k)
-
-            grouped_values[table_name] = own_values
+            grouped_values = self.__group_inheritance_values(all_values, cls)
             return grouped_values
-        return None
 
-    def _find_parent_values(self, array, cls):
-        parent_classes = self.__class_inheritance.get(type(cls))
-        parent_objects = []
-        for i in range(len(parent_classes)):
-            parent_objects.append(parent_classes[i]())
-        table_names = []
-        for i in range(len(parent_objects)):
-            table_names.append(self._get_table_name(parent_objects[i]))
+    def __group_inheritance_values(self, values, cls):
+        grouped_values = dict()
+        inherit_from = self.__class_inheritance.get(type(cls))
 
-        values_from_all_data = {}
-        parent_dictionary = {}
-        for i in range(len(table_names)):
-            new_dict = {}
-            values_from_all_data[table_names[i]] = self.__all_data[table_names[i]]
-            parent_dictionary[table_names[i]] = new_dict
+        for i in range(len(inherit_from)):
+            val = {}
+            for j in values:
+                if j in inherit_from[i].__dict__:
+                    val[j] = getattr(cls, j)
+            grouped_values[self.__class_table_dict.get(inherit_from[i])] = val
+        child_table_name = self._get_table_name(cls)
+        child_values = {}
+        for k, v in self.__all_data[child_table_name].items():
+            if k in values:
+                child_values[k] = getattr(cls, k)
+        grouped_values[child_table_name] = child_values
 
-            for k, v in values_from_all_data[table_names[i]].items():
-                if k in array:
-                    var = getattr(cls, array[array.index(k)])
-                    if var:
-                        new_dict[k] = var
-
-        del parent_objects
-        return parent_dictionary
+        return grouped_values
