@@ -44,6 +44,11 @@ class Manager(metaclass=SingletonMeta):
         self.__class_inheritance = self.__get_all_inheritances(self.__class_names.values())
         self.__inherit_pk_all_data_modification()
         print(self.__all_data)
+        print(self.__class_names)
+        print(self.__class_table_dict)
+        print(self.__junction_tables)
+        print(self.__junction_tables_names)
+        print(self.__class_inheritance)
 
     def __inherit_pk_all_data_modification(self):
         for i in range(len(self.__all_data)):
@@ -195,19 +200,25 @@ class Manager(metaclass=SingletonMeta):
                     first_fk_name = self._find_name_of_first_fk_column(class_name, second_table_name)
 
                     second_fk_field_name, _, second_fk_type = second_fk
-                    second_fk_values = getattr(entity, field_name)
+                    second_fk_objects = getattr(entity, field_name)
+                    second_fk_values = self._find_foreign_key_values_in_m2m(second_fk_objects, second_fk_field_name)
                     second_fk_name = self.__get_column_name(field_object, field_name)
 
                     junction_table_name = self._find_name_of_junction_table(table_name, second_table_name)
 
-                    if not isinstance(second_fk_values, ManyToMany):
-                        for second_value in second_fk_values:
-                            builder = InsertBuilder().into(junction_table_name)
-                            builder.add(first_fk_name, first_fk_type, first_fk_value)
-                            builder.add(second_fk_name, second_fk_type, second_value)
-                            self._execute_query(builder.build(), 'INSERT')
+                    for second_value in second_fk_values:
+                        builder = InsertBuilder().into(junction_table_name)
+                        builder.add(first_fk_name, first_fk_type, first_fk_value)
+                        builder.add(second_fk_name, second_fk_type, second_value)
+                        self._execute_query(builder.build(), 'INSERT')
 
-                    break
+    def _find_foreign_key_values_in_m2m(self, objects, fk_field_name):
+        second_fk_values = []
+        if not isinstance(objects, ManyToMany):
+            for relation_object in objects:
+                value = getattr(relation_object, fk_field_name)
+                second_fk_values.append(value)
+        return second_fk_values
 
     def _find_name_of_first_fk_column(self, class_name, second_table_name):
         first_fk_name = None
@@ -232,7 +243,7 @@ class Manager(metaclass=SingletonMeta):
 
         primary_key = self._find_primary_key_of_table(table_name)
         assert primary_key is not None
-        print(primary_key)
+        # print(primary_key)
         primary_key_field_name, primary_key_name, primary_key_type = primary_key
         primary_key_value = getattr(entity, primary_key_field_name)
         primary_key_saved_value = entity.get_primary_key()
@@ -250,20 +261,21 @@ class Manager(metaclass=SingletonMeta):
         assert builder is not None
 
         if query_type in ('INSERT', 'UPDATE'):
-            types, names = self._find_names_and_types_of_columns(table_name)
+            types, names, values = self._find_names_types_values_of_column(table_name, entity)
             for field_name in types.keys():
                 store_type = types[field_name]
                 column_name = names[field_name]
-                value = getattr(entity, field_name)
+                value = values[field_name]
 
-                # case for values that are not already assigned (NULL)
+                # case for values that are not already assigned (NULL) or are assigned with None
                 if not isinstance(value, Column) and \
                         not isinstance(value, PrimaryKey) and \
-                        not isinstance(value, Relationship):
+                        not isinstance(value, Relationship) and \
+                        value is not None:
                     builder.add(column_name, store_type, value)
 
         if query_type in ('UPDATE', 'DELETE'):
-            print(type(primary_key_name), type(primary_key_type), type(primary_key_saved_value))
+            # print(type(primary_key_name), type(primary_key_type), type(primary_key_saved_value))
             builder.where(primary_key_name, primary_key_type, primary_key_saved_value)
 
         self._execute_query(builder.build(), query_type)
@@ -435,6 +447,32 @@ class Manager(metaclass=SingletonMeta):
 
         return types, names
 
+    # temporary duplicated code :( sorry
+    def _find_names_types_values_of_column(self, table_name, entity):
+        fields = self.__all_data[table_name].items()
+        types = dict()  # [field_name : column_type]
+        names = dict()  # [field_name : column_name]
+        values = dict() # [field_name : value]
+
+        for field_name, field_object in fields:
+            if isinstance(field_object, Column) or isinstance(field_object, PrimaryKey):
+                types[field_name] = field_object.type
+                values[field_name] = getattr(entity, field_name)
+            elif isinstance(field_object, ManyToOne) or isinstance(field_object, OneToOne):
+                primary_key = self._find_type_of_primary_key_of_relation(field_object.other)
+                assert primary_key is not None
+                primary_key_field_name, primary_key_name, primary_key_type = primary_key
+                types[field_name] = primary_key_type
+                relation_object = getattr(entity, field_name)
+                if not isinstance(relation_object, Relationship):
+                    values[field_name] = getattr(relation_object, primary_key_field_name)
+                else:
+                    values[field_name] = None
+
+            names[field_name] = self.__get_column_name(field_object, field_name)
+
+        return types, names, values
+
     def _find_primary_key_of_table(self, table_name):
         fields = self.__all_data[table_name].items()
 
@@ -460,8 +498,8 @@ class Manager(metaclass=SingletonMeta):
         table_name = self._get_table_name(entity)
         primary_key = self._find_primary_key_of_table(table_name)
         assert primary_key is not None
-        _, _, primary_key_type = primary_key
-        return primary_key_type
+        primary_key_field_name, primary_key_name, primary_key_type = primary_key
+        return primary_key_field_name, primary_key_name, primary_key_type
 
     def _execute_query(self, query: str, query_type: str = 'QUERY'):
         if self.__is_connected:
