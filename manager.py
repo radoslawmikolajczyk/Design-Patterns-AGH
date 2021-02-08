@@ -237,31 +237,6 @@ class Manager(metaclass=SingletonMeta):
 
         return junction_table_name
 
-    def _execute_sql_function_for_objects_with_inheritance(self, entity: Entity, query_type: str, table_name: str):
-
-
-        builder = None
-
-        if query_type is 'INSERT':
-            builder = InsertBuilder().into(table_name)
-        elif query_type is 'UPDATE':
-            builder = UpdateBuilder().table(table_name)
-        elif query_type is 'DELETE':
-            builder = DeleteBuilder().table(table_name)
-
-        assert builder is not None
-
-
-        tables.append(table_name)
-
-        if query_type in ('INSERT', 'UPDATE'):
-            for table in tables:
-                types, names, values = self._find_names_types_values_of_column(table, entity)
-                print(types, names, values)
-
-
-
-
     def _execute_sql_function(self, entity: Entity, query_type: str):
         table_name = self._get_table_name(entity)
         has_inheritance = self.__get_table_name_by_class(self.__class_table_dict, table_name) in self.__class_inheritance
