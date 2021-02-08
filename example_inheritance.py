@@ -1,28 +1,24 @@
 from entity.entity import Entity
 import fields.field as field
 import fields.storetype as storetype
-import fields.relationship as rel
 from connection.configuration import ConnectionConfiguration
 from manager import Manager
 
 
-class Country(Entity):
-    _table_name = 'panstwo'
-    country_id = field.PrimaryKey(storetype.Integer())
-    country_name = field.Column(storetype.Text(max_length=30))
+class Animal(Entity):
+    _table_name = 'animal'
+    animal_id = field.PrimaryKey(storetype.Integer(), name='animal_id_int')
 
 
-class City(Country):
-    _table_name = 'miasto'
-    city_id = field.PrimaryKey(storetype.Integer())
-    city_name = field.Column(storetype.Text(max_length=30), name="city_name")
+class Mammal(Animal):
+    _table_name = 'mammal'
+    mammal_type = field.Column(storetype.Text(max_length=30), name="mammal_type")
 
 
-class Address(City):
-    _table_name = 'address'
-    address_id = field.Column(storetype.Text(max_length=30), unique=True, nullable=False, name='addr_id')
-    street_name = field.Column(storetype.Text(max_length=80))
-    home_nr = field.Column(storetype.Integer(), name='home_nr')
+class Monkey(Mammal):
+    _table_name = 'monkey'
+    monkey_name = field.Column(storetype.Text(max_length=80))
+    monkey_weight = field.Column(storetype.Float())
 
 
 m = Manager()
@@ -31,13 +27,10 @@ conf = ConnectionConfiguration(user="postgres",
                                database="postgres")
 m.connect(conf)
 
-a = Address()
-
-a.country_id = 1
-a.city_id = 1
-a.address_id = "Ulica Czarnowiejska"
-a.country_name = "Polska"
-a.city_name = "Kraków"
-
+monkey = Monkey()
+monkey.animal_id = 1
+monkey.mammal_type = 'humanoid'
+monkey.monkey_name = 'Ham'
+monkey.monkey_weight = 20.5
 
 

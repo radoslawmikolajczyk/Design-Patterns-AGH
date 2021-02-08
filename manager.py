@@ -41,10 +41,27 @@ class Manager(metaclass=SingletonMeta):
         self.__junction_tables_names = []
         # self.__class_inheritance -- dict for all classes (without Entity) which inherit,
         # ex. { <class '__main__.Address'> : [<class '__main__.City'>, <class '__main__.Street'>]}
-        self.__class_inheritance = {}
+        self.__class_inheritance = self.__get_all_inheritances(self.__class_names.values())
+        self.__inherit_pk_all_data_modification()
+        print(self.__all_data)
 
-        # { adres_obiektu: { nazwa_pola : wartosc, ... }}
-        self.__object_stack = dict()
+    def __inherit_pk_all_data_modification(self):
+        for i in range(len(self.__all_data)):
+            name = list(self.__all_data.keys())[i]
+            inherit = self.__get_table_name_by_class(self.__class_table_dict, name) in self.__class_inheritance
+            if inherit:
+                class_key = self.__get_table_name_by_class(self.__class_table_dict, name)
+                inherited_classes = self.__class_inheritance[class_key]
+                base_tab_name = self.__class_table_dict[inherited_classes[0]]
+                pk = self._find_primary_key_of_table(base_tab_name)
+                primary_key_value = self.__all_data[base_tab_name][pk[0]]
+
+                new_dict = dict()
+                new_dict[pk[0]] = primary_key_value
+                for k, v in self.__all_data[name].items():
+                    if not isinstance(v, PrimaryKey):
+                        new_dict[k] = v
+                self.__all_data[name] = new_dict
 
     # create table for a given class
     def create_table(self, entity: Entity):
@@ -95,6 +112,12 @@ class Manager(metaclass=SingletonMeta):
 
     def create_tables(self):
         self.__create_tables_mapper(self.__all_data)
+
+    def __get_table_name_by_class(self, dictionary, table_name):
+        items_list = dictionary.items()
+        for item in items_list:
+            if item[1] == table_name:
+                return item[0]
 
     # OneToOne and OneToMany relations
     def __get_o_relation(self, entity_name):
@@ -446,47 +469,45 @@ class Manager(metaclass=SingletonMeta):
         else:
             print("CREATE A CONNECTION TO DATABASE!")
 
-    def _has_inheritance(self, cls):
-        inheritance_list = []
-        for key, value in self.__class_names.items():
-            if isinstance(cls, value) and value != type(cls):
-                inheritance_list.append(value)
-        if len(inheritance_list) > 0:
-            self.__class_inheritance[type(cls)] = inheritance_list
-            return True
-        return False
+    def __get_all_inheritances(self, classes):
+        inheritance_dictionary = dict()
+        for base_class in classes:
+            val = []
+            for subclass in classes:
+                if issubclass(base_class, subclass) and base_class != subclass:
+                    val.append(subclass)
+            if val:
+                inheritance_dictionary[base_class] = val
+        return inheritance_dictionary
 
-    def __split_inheritance_data(self, cls):
-        if self._has_inheritance(cls):
-            all_values = [i for i in dir(cls) if
+    def __split_inheritance_data(self, entity):
+        if type(entity) in self.__class_inheritance:
+            all_values = [i for i in dir(entity) if
                           not i.startswith('__') and not i.endswith('__') and i not in dir(Entity)]
-            all_values = [i for i in all_values if not isinstance(getattr(cls, i), Field)]
+            all_values = [i for i in all_values if not isinstance(getattr(entity, i), Field)]
 
-            grouped_values = self.__group_inheritance_values(all_values, cls)
+            grouped_values = self.__group_inheritance_values(all_values, entity)
             return grouped_values
         return None
 
-    def __group_inheritance_values(self, values, cls):
+    def __group_inheritance_values(self, values, entity):
         grouped_values = dict()
-        inherit_from = self.__class_inheritance.get(type(cls))
+        inherit_from = self.__class_inheritance.get(type(entity))
 
         for i in range(len(inherit_from)):
             val = {}
+            actual_table = self.__class_table_dict.get(inherit_from[i])
             for j in values:
                 if j in inherit_from[i].__dict__:
-                    val[j] = getattr(cls, j)
-            grouped_values[self.__class_table_dict.get(inherit_from[i])] = val
-        child_table_name = self._get_table_name(cls)
+                    val[j] = getattr(entity, j)
+                if j in self.__all_data[actual_table] and j not in val:
+                    val[j] = getattr(entity, j)
+            grouped_values[actual_table] = val
+        child_table_name = self._get_table_name(entity)
         child_values = {}
         for k, v in self.__all_data[child_table_name].items():
             if k in values:
-                child_values[k] = getattr(cls, k)
+                child_values[k] = getattr(entity, k)
         grouped_values[child_table_name] = child_values
 
         return grouped_values
-
-    def __append_update_stack(self, obj):
-        self.__object_stack[obj] = obj.__dict__
-
-    def __del_obj_from_stack(self, obj):
-        del self.__object_stack[obj]
