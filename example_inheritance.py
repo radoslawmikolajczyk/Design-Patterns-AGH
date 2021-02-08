@@ -34,9 +34,14 @@ monkey.mammal_type = 'humanoid'
 monkey.monkey_name = 'Ham'
 monkey.monkey_weight = 20.5
 
+# EXAMPLE 1 ######################## simple insert, update, delete ##################################
+
 m.insert(monkey)
 monkey.monkey_weight = 30.9
 m.update(monkey)
 m.delete(monkey)
+
+# EXAMPLE 2 ######################## simple multi insert ##################################
+
 
 m.close()
