@@ -237,17 +237,8 @@ class Manager(metaclass=SingletonMeta):
 
         return junction_table_name
 
-    def _execute_sql_function(self, entity: Entity, query_type: str):
+    def _execute_sql_function_for_objects_with_inheritance(self, entity: Entity, query_type: str, table_name: str):
 
-        table_name = self._get_table_name(entity)
-
-        primary_key = self._find_primary_key_of_table(table_name)
-        assert primary_key is not None
-        # print(primary_key)
-        primary_key_field_name, primary_key_name, primary_key_type = primary_key
-        primary_key_value = getattr(entity, primary_key_field_name)
-        primary_key_saved_value = entity.get_primary_key()
-        entity._primary_key = primary_key_value
 
         builder = None
 
@@ -260,25 +251,70 @@ class Manager(metaclass=SingletonMeta):
 
         assert builder is not None
 
+
+        tables.append(table_name)
+
         if query_type in ('INSERT', 'UPDATE'):
-            types, names, values = self._find_names_types_values_of_column(table_name, entity)
-            for field_name in types.keys():
-                store_type = types[field_name]
-                column_name = names[field_name]
-                value = values[field_name]
+            for table in tables:
+                types, names, values = self._find_names_types_values_of_column(table, entity)
+                print(types, names, values)
 
-                # case for values that are not already assigned (NULL) or are assigned with None
-                if not isinstance(value, Column) and \
-                        not isinstance(value, PrimaryKey) and \
-                        not isinstance(value, Relationship) and \
-                        value is not None:
-                    builder.add(column_name, store_type, value)
 
-        if query_type in ('UPDATE', 'DELETE'):
-            # print(type(primary_key_name), type(primary_key_type), type(primary_key_saved_value))
-            builder.where(primary_key_name, primary_key_type, primary_key_saved_value)
 
-        self._execute_query(builder.build(), query_type)
+
+    def _execute_sql_function(self, entity: Entity, query_type: str):
+        table_name = self._get_table_name(entity)
+        has_inheritance = self.__get_table_name_by_class(self.__class_table_dict, table_name) in self.__class_inheritance
+        tables = [table_name]
+
+        if has_inheritance:
+            inherited_classes = self.__class_inheritance[entity.__class__]
+            for iclass in inherited_classes:
+                tables.append(self.__class_table_dict[iclass])
+            base_class_table_name = self.__class_table_dict[inherited_classes[0]]
+            primary_key = self._find_primary_key_of_table(base_class_table_name)
+        else:
+            primary_key = self._find_primary_key_of_table(table_name)
+
+        assert primary_key is not None
+        primary_key_field_name, primary_key_name, primary_key_type = primary_key
+        primary_key_value = getattr(entity, primary_key_field_name)
+        primary_key_saved_value = entity.get_primary_key()
+        entity._primary_key = primary_key_value
+
+        builder = None
+
+        for table_name in tables:
+
+            if query_type is 'INSERT':
+                builder = InsertBuilder().into(table_name)
+            elif query_type is 'UPDATE':
+                builder = UpdateBuilder().table(table_name)
+            elif query_type is 'DELETE':
+                builder = DeleteBuilder().table(table_name)
+
+            assert builder is not None
+
+            if query_type in ('INSERT', 'UPDATE'):
+                    types, names, values = self._find_names_types_values_of_column(table_name, entity)
+                    for field_name in types.keys():
+                        store_type = types[field_name]
+                        column_name = names[field_name]
+                        value = values[field_name]
+
+                        # case for values that are not already assigned (NULL) or are assigned with None
+                        if not isinstance(value, Column) and \
+                                not isinstance(value, PrimaryKey) and \
+                                not isinstance(value, Relationship) and \
+                                value is not None:
+                            builder.add(column_name, store_type, value)
+
+            if query_type in ('UPDATE', 'DELETE'):
+                # print(type(primary_key_name), type(primary_key_type), type(primary_key_saved_value))
+                builder.where(primary_key_name, primary_key_type, primary_key_saved_value)
+
+            self._execute_query(builder.build(), query_type)
+            builder = None
 
     def insert(self, entity: Entity):
         self._execute_sql_function(entity, 'INSERT')

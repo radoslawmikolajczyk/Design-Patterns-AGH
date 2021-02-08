@@ -26,6 +26,7 @@ conf = ConnectionConfiguration(user="postgres",
                                password="rajka1001",
                                database="postgres")
 m.connect(conf)
+m.create_tables()
 
 monkey = Monkey()
 monkey.animal_id = 1
@@ -33,4 +34,9 @@ monkey.mammal_type = 'humanoid'
 monkey.monkey_name = 'Ham'
 monkey.monkey_weight = 20.5
 
+m.insert(monkey)
+monkey.monkey_weight = 30.9
+m.update(monkey)
+m.delete(monkey)
 
+m.close()
