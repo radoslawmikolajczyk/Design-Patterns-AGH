@@ -91,6 +91,8 @@ def extract_junction_data(table_name: str, junction_tables, junction_queries):
         if table_name in junction_table_name:
             junction_query = junction_queries[index]
             junction_query = junction_query.split(" ")
+            junction_key = None
+            other_junction_key = None
             for part_index, part in enumerate(junction_query):
                 if 'KEY' in part and table_name in junction_query[part_index + 2]:
                     junction_key = part.split('"')[1]
