@@ -43,12 +43,12 @@ class Manager(metaclass=SingletonMeta):
         # ex. { <class '__main__.Address'> : [<class '__main__.City'>, <class '__main__.Street'>]}
         self.__class_inheritance = self.__get_all_inheritances(self.__class_names.values())
         self.__inherit_pk_all_data_modification()
-        print(self.__all_data)
-        print(self.__class_names)
-        print(self.__class_table_dict)
-        print(self.__junction_tables)
-        print(self.__junction_tables_names)
-        print(self.__class_inheritance)
+        # print(self.__all_data)
+        # print(self.__class_names)
+        # print(self.__class_table_dict)
+        # print(self.__junction_tables)
+        # print(self.__junction_tables_names)
+        # print(self.__class_inheritance)
 
     def __inherit_pk_all_data_modification(self):
         for i in range(len(self.__all_data)):
@@ -238,12 +238,20 @@ class Manager(metaclass=SingletonMeta):
         return junction_table_name
 
     def _execute_sql_function(self, entity: Entity, query_type: str):
-
         table_name = self._get_table_name(entity)
+        has_inheritance = self.__get_table_name_by_class(self.__class_table_dict, table_name) in self.__class_inheritance
+        tables = [table_name]
 
-        primary_key = self._find_primary_key_of_table(table_name)
+        if has_inheritance:
+            inherited_classes = self.__class_inheritance[entity.__class__]
+            for iclass in inherited_classes:
+                tables.append(self.__class_table_dict[iclass])
+            base_class_table_name = self.__class_table_dict[inherited_classes[0]]
+            primary_key = self._find_primary_key_of_table(base_class_table_name)
+        else:
+            primary_key = self._find_primary_key_of_table(table_name)
+
         assert primary_key is not None
-        # print(primary_key)
         primary_key_field_name, primary_key_name, primary_key_type = primary_key
         primary_key_value = getattr(entity, primary_key_field_name)
         primary_key_saved_value = entity.get_primary_key()
@@ -251,34 +259,37 @@ class Manager(metaclass=SingletonMeta):
 
         builder = None
 
-        if query_type is 'INSERT':
-            builder = InsertBuilder().into(table_name)
-        elif query_type is 'UPDATE':
-            builder = UpdateBuilder().table(table_name)
-        elif query_type is 'DELETE':
-            builder = DeleteBuilder().table(table_name)
+        for table_name in tables:
 
-        assert builder is not None
+            if query_type is 'INSERT':
+                builder = InsertBuilder().into(table_name)
+            elif query_type is 'UPDATE':
+                builder = UpdateBuilder().table(table_name)
+            elif query_type is 'DELETE':
+                builder = DeleteBuilder().table(table_name)
 
-        if query_type in ('INSERT', 'UPDATE'):
-            types, names, values = self._find_names_types_values_of_column(table_name, entity)
-            for field_name in types.keys():
-                store_type = types[field_name]
-                column_name = names[field_name]
-                value = values[field_name]
+            assert builder is not None
 
-                # case for values that are not already assigned (NULL) or are assigned with None
-                if not isinstance(value, Column) and \
-                        not isinstance(value, PrimaryKey) and \
-                        not isinstance(value, Relationship) and \
-                        value is not None:
-                    builder.add(column_name, store_type, value)
+            if query_type in ('INSERT', 'UPDATE'):
+                    types, names, values = self._find_names_types_values_of_column(table_name, entity)
+                    for field_name in types.keys():
+                        store_type = types[field_name]
+                        column_name = names[field_name]
+                        value = values[field_name]
 
-        if query_type in ('UPDATE', 'DELETE'):
-            # print(type(primary_key_name), type(primary_key_type), type(primary_key_saved_value))
-            builder.where(primary_key_name, primary_key_type, primary_key_saved_value)
+                        # case for values that are not already assigned (NULL) or are assigned with None
+                        if not isinstance(value, Column) and \
+                                not isinstance(value, PrimaryKey) and \
+                                not isinstance(value, Relationship) and \
+                                value is not None:
+                            builder.add(column_name, store_type, value)
 
-        self._execute_query(builder.build(), query_type)
+            if query_type in ('UPDATE', 'DELETE'):
+                # print(type(primary_key_name), type(primary_key_type), type(primary_key_saved_value))
+                builder.where(primary_key_name, primary_key_type, primary_key_saved_value)
+
+            self._execute_query(builder.build(), query_type)
+            builder = None
 
     def insert(self, entity: Entity):
         self._execute_sql_function(entity, 'INSERT')
@@ -300,7 +311,7 @@ class Manager(metaclass=SingletonMeta):
 
     def find_by(self, model: Entity, key_name: str, key_value):
         table_name = self._get_table_name(model)
-        types, names = self._find_names_and_types_of_columns(table_name)
+        types, names, _ = self._find_names_types_values_of_column(table_name, None)
         id_field_name, _, _ = self._find_primary_key_of_table(table_name)
         builder = SelectBuilder().table(table_name)
         for field_name in types.keys():
@@ -341,7 +352,7 @@ class Manager(metaclass=SingletonMeta):
     def select(self, model: Entity, query: str) -> list:
         if self.__is_connected:
             table_name = self._get_table_name(model)
-            _, names = self._find_names_and_types_of_columns(table_name)
+            _, names, _ = self._find_names_types_values_of_column(table_name, None)
             query_result = self.__database_connection.execute(query)
             result = self.__map_result_fields(model, names.keys(), query_result)
             return result
@@ -431,23 +442,6 @@ class Manager(metaclass=SingletonMeta):
             table_name = entity.__name__.lower()
         return table_name
 
-    def _find_names_and_types_of_columns(self, table_name):
-        fields = self.__all_data[table_name].items()
-        types = dict()  # [field_name : column_type]
-        names = dict()  # [field_name : column_name]
-
-        for field_name, field_object in fields:
-            if isinstance(field_object, Column) or isinstance(field_object, PrimaryKey):
-                types[field_name] = field_object.type
-            elif isinstance(field_object, ManyToOne) or isinstance(field_object, OneToOne):
-                primary_key_type = self._find_type_of_primary_key_of_relation(field_object.other)
-                types[field_name] = primary_key_type
-
-            names[field_name] = self.__get_column_name(field_object, field_name)
-
-        return types, names
-
-    # temporary duplicated code :( sorry
     def _find_names_types_values_of_column(self, table_name, entity):
         fields = self.__all_data[table_name].items()
         types = dict()  # [field_name : column_type]
@@ -457,17 +451,19 @@ class Manager(metaclass=SingletonMeta):
         for field_name, field_object in fields:
             if isinstance(field_object, Column) or isinstance(field_object, PrimaryKey):
                 types[field_name] = field_object.type
-                values[field_name] = getattr(entity, field_name)
+                if entity is not None:
+                    values[field_name] = getattr(entity, field_name)
             elif isinstance(field_object, ManyToOne) or isinstance(field_object, OneToOne):
                 primary_key = self._find_type_of_primary_key_of_relation(field_object.other)
                 assert primary_key is not None
                 primary_key_field_name, primary_key_name, primary_key_type = primary_key
                 types[field_name] = primary_key_type
-                relation_object = getattr(entity, field_name)
-                if not isinstance(relation_object, Relationship):
-                    values[field_name] = getattr(relation_object, primary_key_field_name)
-                else:
-                    values[field_name] = None
+                if entity is not None:
+                    relation_object = getattr(entity, field_name)
+                    if not isinstance(relation_object, Relationship):
+                        values[field_name] = getattr(relation_object, primary_key_field_name)
+                    else:
+                        values[field_name] = None
 
             names[field_name] = self.__get_column_name(field_object, field_name)
 
