@@ -31,7 +31,7 @@ def get_column_name(field, field_name):
 
 
 def get_table_name(entity: Entity):
-    if entity._table_name is not "":
+    if entity._table_name != "":
         table_name = entity._table_name
     else:
         if isinstance(entity, Entity):
