@@ -57,3 +57,22 @@ def find_primary_key_of_table(all_data, table_name):
             return primary_key
 
     return None
+
+
+def get_all_inheritances(classes):
+    inheritance_dictionary = dict()
+    for base_class in classes:
+        val = []
+        for subclass in classes:
+            if issubclass(base_class, subclass) and base_class != subclass:
+                val.append(subclass)
+        if val:
+            inheritance_dictionary[base_class] = val
+    return inheritance_dictionary
+
+
+def get_key_by_value(dictionary, table_name):
+    items_list = dictionary.items()
+    for item in items_list:
+        if item[1] == table_name:
+            return item[0]
