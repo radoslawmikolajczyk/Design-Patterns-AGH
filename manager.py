@@ -5,16 +5,16 @@ from builders.insert import InsertBuilder
 from builders.update import UpdateBuilder
 from builders.select import SelectBuilder
 from builders.ddl import DDLConstraintAction
+import builders.ddl as ddl
 
 from connection.configuration import ConnectionConfiguration
 from connection.database import DatabaseConnection
+from connection.query import QueryResult
 from entity.entity import Entity
 from collections import defaultdict
-from connection.query import QueryResult
 from fields.relationship import OneToOne, ManyToOne, ManyToMany, Relationship
-
 from fields.field import Column, PrimaryKey, Field
-import builders.ddl as ddl
+from iup_helper import find_name_of_first_fk_column, get_column_name, find_foreign_key_values_in_m2m, get_table_name
 
 from copy import deepcopy
 
@@ -75,7 +75,7 @@ class Manager(metaclass=SingletonMeta):
 
     # create table for a given class
     def create_table(self, entity: Entity):
-        table_name = self._get_table_name(entity)
+        table_name = get_table_name(entity)
         values_from_all_data = self.__all_data[table_name]
         data = {table_name: values_from_all_data}
         self.__create_tables_mapper(data)
@@ -88,7 +88,7 @@ class Manager(metaclass=SingletonMeta):
                 name = list(data.keys())[i]
                 builder.name(name)
                 for key, value in data[name].items():
-                    value.name = self.__get_column_name(value, key)
+                    value.name = get_column_name(value, key)
                     if isinstance(value, PrimaryKey):
                         builder.field(value.name, value.type, False)
                         builder.primary_key(value.name)
@@ -105,12 +105,12 @@ class Manager(metaclass=SingletonMeta):
                         builder.field(value.name, foreign_key[2])
                         if isinstance(value, OneToOne):
                             builder.unique(value.name)  # Because it is one to one relation
-                        foreign_table = self._get_table_name(self.__class_names.get(value.other))
+                        foreign_table = get_table_name(self.__class_names.get(value.other))
                         builder.foreign_key(value.name, foreign_table, foreign_key[1],
                                             on_update=DDLConstraintAction.CASCADE,
                                             on_delete=DDLConstraintAction.CASCADE)
                     if isinstance(value, ManyToMany):
-                        second_table = self._get_table_name(self.__class_names.get(value.other))
+                        second_table = get_table_name(self.__class_names.get(value.other))
                         second_value = self.__find_many_to_many_relation_value(second_table)
                         self.__create_junction_table(name, second_table, value, second_value)
 
@@ -132,19 +132,13 @@ class Manager(metaclass=SingletonMeta):
     # OneToOne and OneToMany relations
     def __get_o_relation(self, entity_name):
         entity = self.__class_names.get(entity_name)
-        table_name = self._get_table_name(entity)
+        table_name = get_table_name(entity)
         return self._find_primary_key_of_table(table_name)
 
     def __find_many_to_many_relation_value(self, table_name):
         for key, value in self.__all_data[table_name].items():
             if isinstance(value, ManyToMany):
                 return value
-
-    def __get_column_name(self, field, field_name):
-        if field.name == Field.default_name:
-            return field_name
-        else:
-            return field.name
 
     def __create_junction_table(self, first_table, second_table, first_field_name, second_field_name):
         table_name = first_table + self.__join_char + second_table
@@ -187,13 +181,13 @@ class Manager(metaclass=SingletonMeta):
         for entity in entities:
             self.insert(entity)
         for entity in entities:
-            table_name = self._get_table_name(entity)
+            table_name = get_table_name(entity)
             fields = self.__all_data[table_name].items()
             for field_name, field_object in fields:
                 if isinstance(field_object, ManyToMany):
                     first_fk = self._find_primary_key_of_table(table_name)
                     second_entity = self.__class_names.get(field_object.other)
-                    second_table_name = self._get_table_name(second_entity)
+                    second_table_name = get_table_name(second_entity)
                     second_fk = self._find_primary_key_of_table(second_table_name)
 
                     assert first_fk is not None
@@ -202,12 +196,12 @@ class Manager(metaclass=SingletonMeta):
                     first_fk_field_name, _, first_fk_type = first_fk
                     first_fk_value = getattr(entity, first_fk_field_name)
                     class_name = type(entity).__name__
-                    first_fk_name = self._find_name_of_first_fk_column(class_name, second_table_name)
+                    first_fk_name = find_name_of_first_fk_column(self.__all_data, class_name, second_table_name)
 
                     second_fk_field_name, _, second_fk_type = second_fk
                     second_fk_objects = getattr(entity, field_name)
-                    second_fk_values = self._find_foreign_key_values_in_m2m(second_fk_objects, second_fk_field_name)
-                    second_fk_name = self.__get_column_name(field_object, field_name)
+                    second_fk_values = find_foreign_key_values_in_m2m(second_fk_objects, second_fk_field_name)
+                    second_fk_name = get_column_name(field_object, field_name)
 
                     junction_table_name = self._find_name_of_junction_table(table_name, second_table_name)
 
@@ -217,24 +211,6 @@ class Manager(metaclass=SingletonMeta):
                         builder.add(second_fk_name, second_fk_type, second_value)
                         self._execute_query(builder.build(), self.__insert_query)
 
-    def _find_foreign_key_values_in_m2m(self, objects, fk_field_name):
-        second_fk_values = []
-        if not isinstance(objects, ManyToMany):
-            for relation_object in objects:
-                value = getattr(relation_object, fk_field_name)
-                second_fk_values.append(value)
-        return second_fk_values
-
-    def _find_name_of_first_fk_column(self, class_name, second_table_name):
-        first_fk_name = None
-        second_fields = self.__all_data[second_table_name].items()
-        for s_field_name, s_field_object in second_fields:
-            if isinstance(s_field_object, ManyToMany) and s_field_object.other == class_name:
-                first_fk_name = self.__get_column_name(s_field_object, s_field_name)
-
-        assert first_fk_name is not None
-        return first_fk_name
-
     def _find_name_of_junction_table(self, first: str, second: str):
         junction_table_name = first + self.__join_char + second
         if junction_table_name not in self.__junction_tables_names:
@@ -243,8 +219,9 @@ class Manager(metaclass=SingletonMeta):
         return junction_table_name
 
     def _execute_sql_function(self, entity: Entity, query_type: str):
-        table_name = self._get_table_name(entity)
-        has_inheritance = self.__get_table_name_by_class(self.__class_table_dict, table_name) in self.__class_inheritance
+        table_name = get_table_name(entity)
+        has_inheritance = self.__get_table_name_by_class(self.__class_table_dict,
+                                                         table_name) in self.__class_inheritance
         tables = [table_name]
 
         if has_inheritance:
@@ -276,18 +253,18 @@ class Manager(metaclass=SingletonMeta):
             assert builder is not None
 
             if query_type in (self.__insert_query, self.__update_query):
-                    types, names, values = self._find_names_types_values_of_column(table_name, entity)
-                    for field_name in types.keys():
-                        store_type = types[field_name]
-                        column_name = names[field_name]
-                        value = values[field_name]
+                types, names, values = self._find_names_types_values_of_column(table_name, entity)
+                for field_name in types.keys():
+                    store_type = types[field_name]
+                    column_name = names[field_name]
+                    value = values[field_name]
 
-                        # case for values that are not already assigned (NULL) or are assigned with None
-                        if not isinstance(value, Column) and \
-                                not isinstance(value, PrimaryKey) and \
-                                not isinstance(value, Relationship) and \
-                                value is not None:
-                            builder.add(column_name, store_type, value)
+                    # case for values that are not already assigned (NULL) or are assigned with None
+                    if not isinstance(value, Column) and \
+                            not isinstance(value, PrimaryKey) and \
+                            not isinstance(value, Relationship) and \
+                            value is not None:
+                        builder.add(column_name, store_type, value)
 
             if query_type in (self.__update_query, self.__delete_query):
                 builder.where(primary_key_name, primary_key_type, primary_key_saved_value)
@@ -305,7 +282,7 @@ class Manager(metaclass=SingletonMeta):
         self._execute_sql_function(entity, self.__update_query)
 
     def find_by_id(self, model: Entity, id, many_keys=False):
-        table_name = self._get_table_name(model)
+        table_name = get_table_name(model)
         id_field_name, _, _ = self._find_primary_key_of_table(table_name)
         result = self.find_by(model, id_field_name, id, many_keys)
         try:
@@ -314,7 +291,7 @@ class Manager(metaclass=SingletonMeta):
             return None
 
     def find_by(self, model: Entity, key_name: str, key_value, many_keys=False):
-        table_name = self._get_table_name(model)
+        table_name = get_table_name(model)
         types, names, _ = self._find_names_types_values_of_column(table_name, None)
         builder = self.__build_regular(table_name, types, names, key_name, key_value)
 
@@ -377,11 +354,11 @@ class Manager(metaclass=SingletonMeta):
 
     def __build_inheritance(self, model, builder):
         parents = self.__class_inheritance[type(model)]
-        table_name = self._get_table_name(model)
+        table_name = get_table_name(model)
         _, model_pk, _ = self._find_primary_key_of_table(table_name)
 
         for parent_class in parents:
-            parent_name = self._get_table_name(parent_class)
+            parent_name = get_table_name(parent_class)
             _, parent_pk, _ = self._find_primary_key_of_table(parent_name)
             builder.join(parent_name, parent_pk, table_name, parent_pk)
             self.__add_parent_columns(builder, parent_name, model_pk)
@@ -391,7 +368,7 @@ class Manager(metaclass=SingletonMeta):
         for name in names.values():
             if name != child_pk_name:
                 builder.add(table_name, name)
-    
+
     def select(self, model: Entity, query: str, many_keys=False, junction_data=None) -> list:
         if self.__is_connected:
             names = self.__get_field_names_dict(model)
@@ -403,7 +380,7 @@ class Manager(metaclass=SingletonMeta):
             return []
 
     def __get_field_names_dict(self, model):
-        table_name = self._get_table_name(model)
+        table_name = get_table_name(model)
         _, names, _ = self._find_names_types_values_of_column(table_name, None)
         model_inherits = (type(model) in self.__class_inheritance.keys())
         if model_inherits:
@@ -412,11 +389,11 @@ class Manager(metaclass=SingletonMeta):
 
     def __add_parent_fields(self, model, child_names):
         parents = self.__class_inheritance[type(model)]
-        table_name = self._get_table_name(model)
+        table_name = get_table_name(model)
         _, model_pk, _ = self._find_primary_key_of_table(table_name)
 
         for parent_class in parents:
-            parent_name = self._get_table_name(parent_class)
+            parent_name = get_table_name(parent_class)
             _, names, _ = self._find_names_types_values_of_column(parent_name, None)
             for key, value in names.items():
                 if key not in child_names.keys():
@@ -430,8 +407,9 @@ class Manager(metaclass=SingletonMeta):
             print("CREATE A CONNECTION TO DATABASE!")
             return []
 
-    def __map_result_fields(self, model: Entity, fields_columns_map, query_result: QueryResult, many_keys=False, junction_data=None):
-        table_name = self._get_table_name(model)
+    def __map_result_fields(self, model: Entity, fields_columns_map, query_result: QueryResult, many_keys=False,
+                            junction_data=None):
+        table_name = get_table_name(model)
         _, pk_column_name, _ = self._find_primary_key_of_table(table_name)
         fetched = query_result.get_query()
         result = self.__prepare_select_result(model, pk_column_name, fetched)
@@ -452,7 +430,6 @@ class Manager(metaclass=SingletonMeta):
         if not many_keys:
             for obj in list(result.values()):
                 self.__map_many_objects(obj, junction_data, model, fields_columns_map)
-                
 
         return list(result.values())
 
@@ -475,7 +452,7 @@ class Manager(metaclass=SingletonMeta):
             setattr(obj, key, [value])
 
     def __map_many_objects(self, obj, junction_data, model, fields_columns_map):
-        table_name = self._get_table_name(model)
+        table_name = get_table_name(model)
         primary_key = self.__get_object_pk(obj, model)
         for key, value in fields_columns_map.items():
             field_type = getattr(model, key)
@@ -486,15 +463,15 @@ class Manager(metaclass=SingletonMeta):
             self.__link_relation_objects(this_mapped, other_mapped, key, other_junction_key)
 
     def __get_object_pk(self, obj, model):
-        table_name = self._get_table_name(model)
+        table_name = get_table_name(model)
         pk_field_name, _, _ = self._find_primary_key_of_table(table_name)
         primary_key = getattr(obj, pk_field_name)
         return primary_key
 
     def __map_related_objects(self, obj, model, key, junction_data):
-        table_name = self._get_table_name(model)
+        table_name = get_table_name(model)
         primary_key = self.__get_object_pk(obj, model)
-        
+
         field_type = getattr(model, key)
         this_stack = []
         other_stack = getattr(obj, key).copy()
@@ -502,7 +479,8 @@ class Manager(metaclass=SingletonMeta):
         other_mapped = {}
         mapping = "other"
         other_class = self.__class_names[field_type.other]()
-        other_junction_col = self.__extract_other_junction_key(junction_data, table_name, self._get_table_name(self.__class_names[field_type.other]))
+        other_junction_col = self.__extract_other_junction_key(junction_data, table_name, get_table_name(
+            self.__class_names[field_type.other]))
         other_junction_key = self.__get_field_name(other_class, other_junction_col)
 
         while len(this_stack + other_stack) != 0:
@@ -512,7 +490,7 @@ class Manager(metaclass=SingletonMeta):
                 other_mapped[rel_key] = rel_obj
                 for i in getattr(rel_obj, other_junction_key):
                     if i not in this_mapped.keys():
-                            this_stack.append(i)
+                        this_stack.append(i)
                 mapping = "this"
 
             elif mapping == "this" or len(other_stack) == 0:
@@ -544,7 +522,7 @@ class Manager(metaclass=SingletonMeta):
             for i in getattr(mapped, left_key):
                 new_val.append(right[i])
             setattr(mapped, left_key, list(set(new_val)))
-        
+
         for mapped in right.values():
             new_val = []
             for i in getattr(mapped, right_key):
@@ -586,20 +564,11 @@ class Manager(metaclass=SingletonMeta):
             class_tables[subclass] = t_name
         return tables, class_names, class_tables
 
-    def _get_table_name(self, entity: Entity):
-        if entity._table_name is not "":
-            table_name = entity._table_name
-        else:
-            if isinstance(entity, Entity):
-                entity = type(entity)
-            table_name = entity.__name__.lower()
-        return table_name
-
     def _find_names_types_values_of_column(self, table_name, entity):
         fields = self.__all_data[table_name].items()
         types = dict()  # [field_name : column_type]
         names = dict()  # [field_name : column_name]
-        values = dict() # [field_name : value]
+        values = dict()  # [field_name : value]
 
         for field_name, field_object in fields:
             if isinstance(field_object, Column) or isinstance(field_object, PrimaryKey):
@@ -618,7 +587,7 @@ class Manager(metaclass=SingletonMeta):
                     else:
                         values[field_name] = None
 
-            names[field_name] = self.__get_column_name(field_object, field_name)
+            names[field_name] = get_column_name(field_object, field_name)
 
         return types, names, values
 
@@ -627,14 +596,14 @@ class Manager(metaclass=SingletonMeta):
 
         for field_name, field_object in fields:
             if isinstance(field_object, PrimaryKey):
-                column_name = self.__get_column_name(field_object, field_name)
+                column_name = get_column_name(field_object, field_name)
                 primary_key = [field_name, column_name, field_object.type]
                 return primary_key
 
         # if we don't find the primary key field, the primary key is the first column
         for field_name, field_object in fields:
             if isinstance(field_object, Column):
-                column_name = self.__get_column_name(field_object, field_name)
+                column_name = get_column_name(field_object, field_name)
                 primary_key = [field_name, column_name, field_object.type]
                 return primary_key
 
@@ -644,7 +613,7 @@ class Manager(metaclass=SingletonMeta):
         # we need to find a primary key of the table to which relationship is
         # in order to find the type of the relation field
         entity = self.__class_names.get(table_name)
-        table_name = self._get_table_name(entity)
+        table_name = get_table_name(entity)
         primary_key = self._find_primary_key_of_table(table_name)
         assert primary_key is not None
         primary_key_field_name, primary_key_name, primary_key_type = primary_key
@@ -690,7 +659,7 @@ class Manager(metaclass=SingletonMeta):
                 if j in self.__all_data[actual_table] and j not in val:
                     val[j] = getattr(entity, j)
             grouped_values[actual_table] = val
-        child_table_name = self._get_table_name(entity)
+        child_table_name = get_table_name(entity)
         child_values = {}
         for k, v in self.__all_data[child_table_name].items():
             if k in values:
