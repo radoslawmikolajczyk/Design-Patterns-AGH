@@ -158,4 +158,13 @@ a2.fantasy_fk = [fa1, fa2]
 a2.birth_year = b
 
 m.multi_insert([a1, a2, fa1, fa2, r1, r2, b])
+
+m.delete(a1)
+m.delete(a2)
+m.delete(fa1)
+m.delete(fa2)
+m.delete(r1)
+m.delete(r2)
+m.delete(b)
 m.close()
+

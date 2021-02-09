@@ -43,10 +43,10 @@ class Manager(metaclass=SingletonMeta):
         # ex. { <class '__main__.Address'> : [<class '__main__.City'>, <class '__main__.Street'>]}
         self.__class_inheritance = self.__get_all_inheritances(self.__class_names.values())
         self.__inherit_pk_all_data_modification()
-        self.insert_query = 'INSERT'
-        self.update_query = 'UPDATE'
-        self.delete_query = 'DELETE'
-        self.join_char = '_'
+        self.__insert_query = 'INSERT'
+        self.__update_query = 'UPDATE'
+        self.__delete_query = 'DELETE'
+        self.__join_char = '_'
 
         # print(self.__all_data)
         # print(self.__class_names)
@@ -147,8 +147,8 @@ class Manager(metaclass=SingletonMeta):
             return field.name
 
     def __create_junction_table(self, first_table, second_table, first_field_name, second_field_name):
-        table_name = first_table + self.join_char + second_table
-        reversed_name = second_table + self.join_char + first_table
+        table_name = first_table + self.__join_char + second_table
+        reversed_name = second_table + self.__join_char + first_table
 
         if table_name not in self.__junction_tables and reversed_name not in self.__junction_tables_names:
             first_fk = self._find_primary_key_of_table(first_table)
@@ -215,7 +215,7 @@ class Manager(metaclass=SingletonMeta):
                         builder = InsertBuilder().into(junction_table_name)
                         builder.add(first_fk_name, first_fk_type, first_fk_value)
                         builder.add(second_fk_name, second_fk_type, second_value)
-                        self._execute_query(builder.build(), self.insert_query)
+                        self._execute_query(builder.build(), self.__insert_query)
 
     def _find_foreign_key_values_in_m2m(self, objects, fk_field_name):
         second_fk_values = []
@@ -236,9 +236,9 @@ class Manager(metaclass=SingletonMeta):
         return first_fk_name
 
     def _find_name_of_junction_table(self, first: str, second: str):
-        junction_table_name = first + self.join_char + second
+        junction_table_name = first + self.__join_char + second
         if junction_table_name not in self.__junction_tables_names:
-            junction_table_name = second + self.join_char + first
+            junction_table_name = second + self.__join_char + first
 
         return junction_table_name
 
@@ -266,16 +266,16 @@ class Manager(metaclass=SingletonMeta):
 
         for table_name in tables:
 
-            if query_type is self.insert_query:
+            if query_type is self.__insert_query:
                 builder = InsertBuilder().into(table_name)
-            elif query_type is self.update_query:
+            elif query_type is self.__update_query:
                 builder = UpdateBuilder().table(table_name)
-            elif query_type is self.delete_query:
+            elif query_type is self.__delete_query:
                 builder = DeleteBuilder().table(table_name)
 
             assert builder is not None
 
-            if query_type in (self.insert_query, self.update_query):
+            if query_type in (self.__insert_query, self.__update_query):
                     types, names, values = self._find_names_types_values_of_column(table_name, entity)
                     for field_name in types.keys():
                         store_type = types[field_name]
@@ -289,20 +289,20 @@ class Manager(metaclass=SingletonMeta):
                                 value is not None:
                             builder.add(column_name, store_type, value)
 
-            if query_type in (self.update_query, self.delete_query):
+            if query_type in (self.__update_query, self.__delete_query):
                 builder.where(primary_key_name, primary_key_type, primary_key_saved_value)
 
             self._execute_query(builder.build(), query_type)
             builder = None
 
     def insert(self, entity: Entity):
-        self._execute_sql_function(entity, self.insert_query)
+        self._execute_sql_function(entity, self.__insert_query)
 
     def delete(self, entity: Entity):
-        self._execute_sql_function(entity, self.delete_query)
+        self._execute_sql_function(entity, self.__delete_query)
 
     def update(self, entity: Entity):
-        self._execute_sql_function(entity, self.update_query)
+        self._execute_sql_function(entity, self.__update_query)
 
     def find_by_id(self, model: Entity, id, many_keys=False):
         table_name = self._get_table_name(model)
