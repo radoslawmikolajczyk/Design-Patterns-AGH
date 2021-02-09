@@ -357,49 +357,8 @@ class Manager(metaclass=SingletonMeta):
 
         if not many_keys:
             for obj in list(result.values()):
-                for key, value in fields_columns_map.items():
-                    field_type = getattr(model, key)
-                    if not isinstance(field_type, ManyToMany):
-                        continue
-
-                    this_stack = []
-                    other_stack = getattr(obj, key).copy()
-                    this_mapped = {primary_key: obj}
-                    other_mapped = {}
-                    mapping = "other"
-                    other_class = self.__class_names[field_type.other]()
-                    other_junction_key = self.__extract_other_junction_key(junction_data, table_name, self._get_table_name(self.__class_names[field_type.other]))
-
-                    while len(this_stack + other_stack) != 0:
-                        if mapping == "other" or len(this_stack) == 0:
-                            rel_key = other_stack.pop()
-                            rel_obj = self.find_by_id(other_class, rel_key, True)
-                            other_mapped[rel_key] = rel_obj
-                            for i in getattr(rel_obj, other_junction_key):
-                                if i not in this_mapped.keys():
-                                        this_stack.append(i)
-                            mapping = "this"
-
-                        elif mapping == "this" or len(other_stack) == 0:
-                            rel_key = this_stack.pop()
-                            rel_obj = self.find_by_id(model, rel_key, True)
-                            this_mapped[rel_key] = rel_obj
-                            for i in getattr(rel_obj, key):
-                                if i not in other_mapped.keys():
-                                    other_stack.append(i)
-                            mapping = "other"
-
-                    for mapped in this_mapped.values():
-                        new_val = []
-                        for i in getattr(mapped, key):
-                            new_val.append(other_mapped[i])
-                        setattr(mapped, key, list(set(new_val)))
-                    
-                    for mapped in other_mapped.values():
-                        new_val = []
-                        for i in getattr(mapped, other_junction_key):
-                            new_val.append(this_mapped[i])
-                        setattr(mapped, other_junction_key, list(set(new_val)))
+                self.__map_many_objects(obj, junction_data, model, fields_columns_map)
+                
 
         return list(result.values())
 
@@ -421,16 +380,75 @@ class Manager(metaclass=SingletonMeta):
         else:
             setattr(obj, key, [value])
 
-    def __is_column(self, field_value):
-        return isinstance(field_value, Column) or isinstance(field_value, PrimaryKey) or \
-               isinstance(field_value, ManyToOne) or isinstance(field_value, OneToOne) or \
-               isinstance(field_value, ManyToMany)
+    def __map_many_objects(self, obj, junction_data, model, fields_columns_map):
+        table_name = self._get_table_name(model)
+        primary_key = self.__get_object_pk(obj, model)
+        for key, value in fields_columns_map.items():
+            field_type = getattr(model, key)
+            if not isinstance(field_type, ManyToMany):
+                continue
+
+            this_mapped, other_mapped, other_junction_key = self.__map_related_objects(obj, model, key, junction_data)
+            self.__link_relation_objects(this_mapped, other_mapped, key, other_junction_key)
+
+    def __get_object_pk(self, obj, model):
+        table_name = self._get_table_name(model)
+        pk_field_name, _, _ = self._find_primary_key_of_table(table_name)
+        primary_key = getattr(obj, pk_field_name)
+        return primary_key
+
+    def __map_related_objects(self, obj, model, key, junction_data):
+        table_name = self._get_table_name(model)
+        primary_key = self.__get_object_pk(obj, model)
+        
+        field_type = getattr(model, key)
+        this_stack = []
+        other_stack = getattr(obj, key).copy()
+        this_mapped = {primary_key: obj}
+        other_mapped = {}
+        mapping = "other"
+        other_class = self.__class_names[field_type.other]()
+        other_junction_key = self.__extract_other_junction_key(junction_data, table_name, self._get_table_name(self.__class_names[field_type.other]))
+
+        while len(this_stack + other_stack) != 0:
+            if mapping == "other" or len(this_stack) == 0:
+                rel_key = other_stack.pop()
+                rel_obj = self.find_by_id(other_class, rel_key, True)
+                other_mapped[rel_key] = rel_obj
+                for i in getattr(rel_obj, other_junction_key):
+                    if i not in this_mapped.keys():
+                            this_stack.append(i)
+                mapping = "this"
+
+            elif mapping == "this" or len(other_stack) == 0:
+                rel_key = this_stack.pop()
+                rel_obj = self.find_by_id(model, rel_key, True)
+                this_mapped[rel_key] = rel_obj
+                for i in getattr(rel_obj, key):
+                    if i not in other_mapped.keys():
+                        other_stack.append(i)
+                mapping = "other"
+
+        return this_mapped, other_mapped, other_junction_key
 
     def __extract_other_junction_key(self, junction_data, table_name, other_name):
         for dataset in junction_data:
             junction_name = dataset[0]
             if table_name in junction_name and other_name in junction_name:
                 return dataset[1]
+
+    def __link_relation_objects(self, left, right, left_key, right_key):
+        for mapped in left.values():
+            new_val = []
+            for i in getattr(mapped, left_key):
+                new_val.append(right[i])
+            setattr(mapped, left_key, list(set(new_val)))
+        
+        for mapped in right.values():
+            new_val = []
+            for i in getattr(mapped, right_key):
+                new_val.append(left[i])
+            setattr(mapped, right_key, list(set(new_val)))
 
     def __all_subclasses(self, cls):
         all_subclasses = []
