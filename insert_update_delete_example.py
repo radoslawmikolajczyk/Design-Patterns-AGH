@@ -5,18 +5,6 @@ import fields.relationship as rel
 from connection.configuration import ConnectionConfiguration
 from manager.manager import Manager
 
-############################################################################################
-
-# WARNING: these classes are different from the ones in create_tables_example.py
-# so in order to run this file without any errors you should drop schema first
-
-'''
-DROP SCHEMA public CASCADE;
-CREATE SCHEMA public;
-'''
-
-############################################################################################
-
 
 class Person(Entity):  # simple class
     # _table_name = 'osoba'
