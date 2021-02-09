@@ -251,25 +251,26 @@ class Manager(metaclass=SingletonMeta):
     def update(self, entity: Entity):
         self._execute_sql_function(entity, 'UPDATE')
 
-    def find_by_id(self, model: Entity, id):
+    def find_by_id(self, model: Entity, id, many_keys=False):
         table_name = self._get_table_name(model)
         id_field_name, _, _ = self._find_primary_key_of_table(table_name)
-        result = self.find_by(model, id_field_name, id)
+        result = self.find_by(model, id_field_name, id, many_keys)
         try:
             return result[0]
         except IndexError:  # Didn't find anything
             return None
 
-    def find_by(self, model: Entity, key_name: str, key_value):
+    def find_by(self, model: Entity, key_name: str, key_value, many_keys=False):
         table_name = self._get_table_name(model)
         types, names = self._find_names_and_types_of_columns(table_name)
         builder = self.__build_regular(table_name, types, names, key_name, key_value)
 
+        junction_data = None
         if self.__check_got_many_relation(table_name):
-            self.__build_many_relation(table_name, key_name, builder)
+            junction_data = self.__build_many_relation(table_name, key_name, builder)
 
         query, fields = builder.build()
-        return self.select(model, query)
+        return self.select(model, query, many_keys, junction_data)
 
     def __check_got_many_relation(self, table_name):
         for junction_name in self.__junction_tables_names:
@@ -289,10 +290,11 @@ class Manager(metaclass=SingletonMeta):
         other = self.__find_many_to_many_other_field(table_name)
 
         for index, data in enumerate(junction_data):
-            junction_table_name, junction_key= data
+            junction_table_name, junction_key, _ = data
             builder.join(junction_table_name, junction_key, table_name, key_name)
 
             builder.add(junction_table_name, other[index].name)
+        return junction_data
 
     def _get_junction_data(self, table_name: str):
         junction_data = []
@@ -303,7 +305,9 @@ class Manager(metaclass=SingletonMeta):
                 for part_index, part in enumerate(junction_query):
                     if 'KEY' in part and table_name in junction_query[part_index + 2]:
                         junction_key = part.split('"')[1]
-                junction_data.append((junction_table_name, junction_key))
+                    elif 'KEY' in part and table_name not in junction_query[part_index + 2]:
+                        other_junction_key = part.split('"')[1]
+                junction_data.append((junction_table_name, junction_key, other_junction_key))
         return junction_data
 
     def __find_many_to_many_other_field(self, table_name):
@@ -313,6 +317,17 @@ class Manager(metaclass=SingletonMeta):
                 names.append(value)
         return names
 
+    def select(self, model: Entity, query: str, many_keys=False, junction_data=None) -> list:
+        if self.__is_connected:
+            table_name = self._get_table_name(model)
+            _, names = self._find_names_and_types_of_columns(table_name)
+            query_result = self.select_raw(query)
+            result = self.__map_result_fields(model, names, query_result, many_keys, junction_data)
+            return result
+        else:
+            print("CREATE A CONNECTION TO DATABASE!")
+            return []
+
     def select_raw(self, query: str) -> list:
         if self.__is_connected:
             query_result = self.__database_connection.execute(query)
@@ -321,44 +336,70 @@ class Manager(metaclass=SingletonMeta):
             print("CREATE A CONNECTION TO DATABASE!")
             return []
 
-    def select(self, model: Entity, query: str) -> list:
-        if self.__is_connected:
-            table_name = self._get_table_name(model)
-            _, names = self._find_names_and_types_of_columns(table_name)
-            query_result = self.select_raw(query)
-            result = self.__map_result_fields(model, names, query_result)
-            return result
-        else:
-            print("CREATE A CONNECTION TO DATABASE!")
-            return []
-
-    def __map_result_fields(self, model: Entity, fields_columns_map, query_result: QueryResult):
+    def __map_result_fields(self, model: Entity, fields_columns_map, query_result: QueryResult, many_keys=False, junction_data=None):
         table_name = self._get_table_name(model)
         _, pk_column_name, _ = self._find_primary_key_of_table(table_name)
         fetched = query_result.get_query()
-
         result = self.__prepare_select_result(model, pk_column_name, fetched)
         for row in fetched:
             primary_key = row[pk_column_name]
             obj = result[primary_key]
             for key, value in fields_columns_map.items():
                 field_type = getattr(model, key)
-                # print("?????????????????????????", row, field_type, model, key, value, (value not in row))
-                if value not in row:
-                    continue
                 if isinstance(field_type, OneToOne) or isinstance(field_type, ManyToOne):
                     other = self.find_by_id(self.__class_names[field_type.other], row[value])
                     setattr(obj, key, other)
                 elif isinstance(field_type, ManyToMany):
-                    obj_field = getattr(obj, key)
-                    if isinstance(obj_field, list):
-                        setattr(obj, key, obj_field.append(row[value]))
-                    elif self.__is_column(obj_field):
-                        setattr(obj, key, row[value])
-                    else:
-                        setattr(obj, key, [obj_field, row[value]])
+                    self.__map_many_keys(obj, key, row[value])
                 else:
                     setattr(obj, key, row[value])
+            result[primary_key] = obj
+
+        if not many_keys:
+            for obj in list(result.values()):
+                for key, value in fields_columns_map.items():
+                    field_type = getattr(model, key)
+                    if not isinstance(field_type, ManyToMany):
+                        continue
+
+                    this_stack = []
+                    other_stack = getattr(obj, key).copy()
+                    this_mapped = {primary_key: obj}
+                    other_mapped = {}
+                    mapping = "other"
+                    other_class = self.__class_names[field_type.other]()
+                    other_junction_key = self.__extract_other_junction_key(junction_data, table_name, self._get_table_name(self.__class_names[field_type.other]))
+
+                    while len(this_stack + other_stack) != 0:
+                        if mapping == "other" or len(this_stack) == 0:
+                            rel_key = other_stack.pop()
+                            rel_obj = self.find_by_id(other_class, rel_key, True)
+                            other_mapped[rel_key] = rel_obj
+                            for i in getattr(rel_obj, other_junction_key):
+                                if i not in this_mapped.keys():
+                                        this_stack.append(i)
+                            mapping = "this"
+
+                        elif mapping == "this" or len(other_stack) == 0:
+                            rel_key = this_stack.pop()
+                            rel_obj = self.find_by_id(model, rel_key, True)
+                            this_mapped[rel_key] = rel_obj
+                            for i in getattr(rel_obj, key):
+                                if i not in other_mapped.keys():
+                                    other_stack.append(i)
+                            mapping = "other"
+
+                    for mapped in this_mapped.values():
+                        new_val = []
+                        for i in getattr(mapped, key):
+                            new_val.append(other_mapped[i])
+                        setattr(mapped, key, list(set(new_val)))
+                    
+                    for mapped in other_mapped.values():
+                        new_val = []
+                        for i in getattr(mapped, other_junction_key):
+                            new_val.append(this_mapped[i])
+                        setattr(mapped, other_junction_key, list(set(new_val)))
 
         return list(result.values())
 
@@ -371,43 +412,25 @@ class Manager(metaclass=SingletonMeta):
             result[primary_key] = obj
         return result
 
-
-        # table_name = self._get_table_name(model)
-        # pk_field_name, pk_column_name, pk_type = self._find_primary_key_of_table(table_name)
-        # aggregate = {}
-        # records = query_result.get_query()
-        # mapped = [deepcopy(model) for _ in records]
-
-        # pk_index = list(field_names).index(pk_field_name)
-
-        # for i, record in enumerate(records):
-        #     for j, field in enumerate(record):
-        #         setattr(mapped[i], list(field_names)[j], field)
-        #         record_pk = record[pk_index]
-        #         if record_pk in aggregate:
-        #             in_dict = getattr(aggregate[record_pk], list(field_names)[j])
-        #             if self._is_column(in_dict):
-        #                 # this also changes the object in mapped list, because of the way we
-        #                 # added this item to the dict
-        #                 setattr(aggregate[record_pk], list(field_names)[j], field)
-        #             elif in_dict != field and not isinstance(in_dict, list):
-        #                 setattr(aggregate[record_pk], list(field_names)[j], [in_dict, field])
-        #             elif in_dict != field and isinstance(in_dict, list) and field not in in_dict:
-        #                 new = in_dict
-        #                 new.append(field)
-        #                 setattr(aggregate[record_pk], list(field_names)[j], new)
-        #         else:
-        #             # if we add the mapped object to dict this way we essentialy have a dict like
-        #             # {primary_key_value: pointer_to_object_in_mapped_list}
-        #             mapped[i]._primary_key = record_pk
-        #             aggregate[record_pk] = mapped[i]
-
-        # return list(aggregate.values())
+    def __map_many_keys(self, obj, key, value):
+        obj_field = getattr(obj, key)
+        if isinstance(obj_field, list):
+            new = obj_field.copy()
+            new.append(value)
+            setattr(obj, key, new)
+        else:
+            setattr(obj, key, [value])
 
     def __is_column(self, field_value):
         return isinstance(field_value, Column) or isinstance(field_value, PrimaryKey) or \
                isinstance(field_value, ManyToOne) or isinstance(field_value, OneToOne) or \
                isinstance(field_value, ManyToMany)
+
+    def __extract_other_junction_key(self, junction_data, table_name, other_name):
+        for dataset in junction_data:
+            junction_name = dataset[0]
+            if table_name in junction_name and other_name in junction_name:
+                return dataset[1]
 
     def __all_subclasses(self, cls):
         all_subclasses = []
