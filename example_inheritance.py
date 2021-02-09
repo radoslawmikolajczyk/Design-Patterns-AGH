@@ -77,5 +77,9 @@ m2.id = 2
 m2.player_fk = [f1, f2]
 
 m.multi_insert([f1, f2, m1, m2])
+m.delete(f1)
+m.delete(f2)
+m.delete(m1)
+m.delete(m2)
 
 m.close()
