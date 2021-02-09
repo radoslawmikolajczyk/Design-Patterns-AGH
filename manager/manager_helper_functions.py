@@ -170,7 +170,7 @@ def __add_parent_fields(model, child_names, data, class_names, inheritance):
 
     for parent_class in parents:
         parent_name = get_table_name(parent_class)
-        _, names, _ = find_names_types_values_of_column(parent_name, None, all_data, class_names)
+        _, names, _ = find_names_types_values_of_column(parent_name, None, data, class_names)
         for key, value in names.items():
             if key not in child_names.keys():
                 child_names[key] = value
