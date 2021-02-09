@@ -159,8 +159,9 @@ def get_field_names_dict(model, data, class_names, inheritance):
     _, names, _ = find_names_types_values_of_column(table_name, None, data, class_names)
     model_inherits = (type(model) in inheritance.keys())
     if model_inherits:
-        self.__add_parent_fields(model, names, data, class_names, inheritance)
+        __add_parent_fields(model, names, data, class_names, inheritance)
     return names
+
 
 def __add_parent_fields(model, child_names, data, class_names, inheritance):
     parents = inheritance[type(model)]
