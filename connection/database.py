@@ -1,4 +1,5 @@
 import psycopg2
+from psycopg2.extras import RealDictCursor
 from .configuration import ConnectionConfiguration
 from .query import QueryResult
 
@@ -14,9 +15,10 @@ class DatabaseConnection:
     def execute(self, query: str) -> QueryResult:
         result = QueryResult(['None'])
         try:
-            self.cursor = self.connection.cursor()
+            self.cursor = self.connection.cursor(cursor_factory=RealDictCursor)
             self.cursor.execute(query)
-            result.change_query(self.cursor.fetchall())
+            fetched = self.cursor.fetchall()
+            result.change_query([dict(x) for x in fetched])
             print('SELECT was successful: ', query)
         except Exception as error:
             print("Error while querying to database: ", error)
