@@ -53,6 +53,10 @@ monkey.monkey_weight = 20.5
 m.insert(monkey)
 monkey.monkey_weight = 30.9
 m.update(monkey)
+
+find = m.find_by_id(Monkey(), 1)
+print("\nI found a monkey!\nMammal type:", find.mammal_type, "Name:", find.monkey_name, "Weight:", find.monkey_weight, "\n")
+
 m.delete(monkey)
 
 # EXAMPLE 2 ######################## simple multi insert ##################################
@@ -77,6 +81,10 @@ m2.id = 2
 m2.player_fk = [f1, f2]
 
 m.multi_insert([f1, f2, m1, m2])
+
+find = m.find_by_id(Match(), 1)
+print("\nI found a match:", find.id, find.player_fk[0].id, find.player_fk[0].name)
+
 m.delete(f1)
 m.delete(f2)
 m.delete(m1)

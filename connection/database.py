@@ -21,7 +21,7 @@ class DatabaseConnection:
             result.change_query([dict(x) for x in fetched])
             print('SELECT was successful: ', query)
         except Exception as error:
-            print("Error while querying to database: ", error)
+            print("Error while querying to database: ", error, "\nWith query: ", query)
         return result
 
     def commit(self, query: str, query_type: str = 'QUERY'):

@@ -311,13 +311,16 @@ class Manager(metaclass=SingletonMeta):
 
     def find_by(self, model: Entity, key_name: str, key_value, many_keys=False):
         table_name = self._get_table_name(model)
-
         types, names, _ = self._find_names_types_values_of_column(table_name, None)
         builder = self.__build_regular(table_name, types, names, key_name, key_value)
 
         junction_data = None
         if self.__check_got_many_relation(table_name):
-            junction_data = self.__build_many_relation(table_name, key_name, builder)
+            junction_data = self.__build_many_relation(table_name, builder)
+
+        model_inherits = (type(model) in self.__class_inheritance.keys())
+        if model_inherits:
+            self.__build_inheritance(model, builder)
 
         query, fields = builder.build()
         return self.select(model, query, many_keys, junction_data)
@@ -329,16 +332,16 @@ class Manager(metaclass=SingletonMeta):
         return False
 
     def __build_regular(self, table_name, types, names, key_name, key_value):
-
         builder = SelectBuilder().table(table_name)
         for field_name in types.keys():
             builder.add(table_name, names[field_name])
         builder.where(names[key_name], types[key_name], key_value)
         return builder
 
-    def __build_many_relation(self, table_name, key_name, builder):
+    def __build_many_relation(self, table_name, builder):
         junction_data = self._get_junction_data(table_name)
         other = self.__find_many_to_many_other_field(table_name)
+        _, key_name, _ = self._find_primary_key_of_table(table_name)
 
         for index, data in enumerate(junction_data):
             junction_table_name, junction_key, _ = data
@@ -368,16 +371,52 @@ class Manager(metaclass=SingletonMeta):
                 names.append(value)
         return names
 
+    def __build_inheritance(self, model, builder):
+        parents = self.__class_inheritance[type(model)]
+        table_name = self._get_table_name(model)
+        _, model_pk, _ = self._find_primary_key_of_table(table_name)
+
+        for parent_class in parents:
+            parent_name = self._get_table_name(parent_class)
+            _, parent_pk, _ = self._find_primary_key_of_table(parent_name)
+            builder.join(parent_name, parent_pk, table_name, parent_pk)
+            self.__add_parent_columns(builder, parent_name, model_pk)
+
+    def __add_parent_columns(self, builder, table_name, child_pk_name):
+        _, names, _ = self._find_names_types_values_of_column(table_name, None)
+        for name in names.values():
+            if name != child_pk_name:
+                builder.add(table_name, name)
+    
     def select(self, model: Entity, query: str, many_keys=False, junction_data=None) -> list:
         if self.__is_connected:
-            table_name = self._get_table_name(model)
-            _, names, _ = self._find_names_types_values_of_column(table_name, None)
+            names = self.__get_field_names_dict(model)
             query_result = self.select_raw(query)
             result = self.__map_result_fields(model, names, query_result, many_keys, junction_data)
             return result
         else:
             print("CREATE A CONNECTION TO DATABASE!")
             return []
+
+    def __get_field_names_dict(self, model):
+        table_name = self._get_table_name(model)
+        _, names, _ = self._find_names_types_values_of_column(table_name, None)
+        model_inherits = (type(model) in self.__class_inheritance.keys())
+        if model_inherits:
+            self.__add_parent_fields(model, names)
+        return names
+
+    def __add_parent_fields(self, model, child_names):
+        parents = self.__class_inheritance[type(model)]
+        table_name = self._get_table_name(model)
+        _, model_pk, _ = self._find_primary_key_of_table(table_name)
+
+        for parent_class in parents:
+            parent_name = self._get_table_name(parent_class)
+            _, names, _ = self._find_names_types_values_of_column(parent_name, None)
+            for key, value in names.items():
+                if key not in child_names.keys():
+                    child_names[key] = value
 
     def select_raw(self, query: str) -> list:
         if self.__is_connected:
@@ -459,7 +498,8 @@ class Manager(metaclass=SingletonMeta):
         other_mapped = {}
         mapping = "other"
         other_class = self.__class_names[field_type.other]()
-        other_junction_key = self.__extract_other_junction_key(junction_data, table_name, self._get_table_name(self.__class_names[field_type.other]))
+        other_junction_col = self.__extract_other_junction_key(junction_data, table_name, self._get_table_name(self.__class_names[field_type.other]))
+        other_junction_key = self.__get_field_name(other_class, other_junction_col)
 
         while len(this_stack + other_stack) != 0:
             if mapping == "other" or len(this_stack) == 0:
@@ -487,6 +527,12 @@ class Manager(metaclass=SingletonMeta):
             junction_name = dataset[0]
             if table_name in junction_name and other_name in junction_name:
                 return dataset[1]
+
+    def __get_field_name(self, model, search_column):
+        names = self.__get_field_names_dict(model)
+        for field_name, column_name in names.items():
+            if column_name == search_column:
+                return field_name
 
     def __link_relation_objects(self, left, right, left_key, right_key):
         for mapped in left.values():
