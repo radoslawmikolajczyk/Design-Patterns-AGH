@@ -8,9 +8,6 @@ from builders.select import SelectBuilder
 from builders.update import UpdateBuilder
 from connection.configuration import ConnectionConfiguration
 from connection.database import DatabaseConnection
-from entity.entity import Entity
-from fields.field import Column, PrimaryKey
-from fields.relationship import OneToOne, ManyToOne, ManyToMany, Relationship
 from manager.manager_helper_functions import *
 from manager.scanner import Scanner
 from manager.table_mapper import TableMapper
