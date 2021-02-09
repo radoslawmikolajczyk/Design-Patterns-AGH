@@ -312,7 +312,7 @@ class Manager(metaclass=SingletonMeta):
     def find_by(self, model: Entity, key_name: str, key_value, many_keys=False):
         table_name = self._get_table_name(model)
 
-        types, names, _ = self._find_names_and_types_of_columns(table_nam, None)
+        types, names, _ = self._find_names_types_values_of_column(table_name, None)
         builder = self.__build_regular(table_name, types, names, key_name, key_value)
 
         junction_data = None
@@ -371,7 +371,7 @@ class Manager(metaclass=SingletonMeta):
     def select(self, model: Entity, query: str, many_keys=False, junction_data=None) -> list:
         if self.__is_connected:
             table_name = self._get_table_name(model)
-            _, names, _ = self._find_names_and_types_of_columns(table_name, None)
+            _, names, _ = self._find_names_types_values_of_column(table_name, None)
             query_result = self.select_raw(query)
             result = self.__map_result_fields(model, names, query_result, many_keys, junction_data)
             return result
