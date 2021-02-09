@@ -70,8 +70,6 @@ class TableMapper:
             setattr(obj, key, [value])
 
     def __map_many_objects(self, obj, junction_data, model, fields_columns_map):
-        table_name = get_table_name(model)
-        primary_key = get_object_pk(obj, model, self.__data)
         for key, value in fields_columns_map.items():
             field_type = getattr(model, key)
             if not isinstance(field_type, ManyToMany):

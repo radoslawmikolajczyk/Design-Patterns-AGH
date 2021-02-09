@@ -31,7 +31,7 @@ def get_column_name(field, field_name):
 
 
 def get_table_name(entity: Entity):
-    if entity._table_name is not "":
+    if entity._table_name != "":
         table_name = entity._table_name
     else:
         if isinstance(entity, Entity):
@@ -91,6 +91,8 @@ def extract_junction_data(table_name: str, junction_tables, junction_queries):
         if table_name in junction_table_name:
             junction_query = junction_queries[index]
             junction_query = junction_query.split(" ")
+            junction_key = None
+            other_junction_key = None
             for part_index, part in enumerate(junction_query):
                 if 'KEY' in part and table_name in junction_query[part_index + 2]:
                     junction_key = part.split('"')[1]
@@ -159,8 +161,9 @@ def get_field_names_dict(model, data, class_names, inheritance):
     _, names, _ = find_names_types_values_of_column(table_name, None, data, class_names)
     model_inherits = (type(model) in inheritance.keys())
     if model_inherits:
-        self.__add_parent_fields(model, names, data, class_names, inheritance)
+        __add_parent_fields(model, names, data, class_names, inheritance)
     return names
+
 
 def __add_parent_fields(model, child_names, data, class_names, inheritance):
     parents = inheritance[type(model)]
@@ -169,7 +172,7 @@ def __add_parent_fields(model, child_names, data, class_names, inheritance):
 
     for parent_class in parents:
         parent_name = get_table_name(parent_class)
-        _, names, _ = find_names_types_values_of_column(parent_name, None, all_data, class_names)
+        _, names, _ = find_names_types_values_of_column(parent_name, None, data, class_names)
         for key, value in names.items():
             if key not in child_names.keys():
                 child_names[key] = value

@@ -8,9 +8,7 @@ from builders.select import SelectBuilder
 from builders.update import UpdateBuilder
 from connection.configuration import ConnectionConfiguration
 from connection.database import DatabaseConnection
-from entity.entity import Entity
-from fields.field import Column, PrimaryKey
-from fields.relationship import OneToOne, ManyToOne, ManyToMany, Relationship
+from connection.query import QueryResult
 from manager.manager_helper_functions import *
 from manager.scanner import Scanner
 from manager.table_mapper import TableMapper
@@ -333,13 +331,13 @@ class Manager(metaclass=SingletonMeta):
             print("CREATE A CONNECTION TO DATABASE!")
             return []
 
-    def __select_raw(self, query: str) -> list:
+    def __select_raw(self, query: str) -> QueryResult:
         if self.__is_connected:
             query_result = self.__database_connection.execute(query)
             return query_result
         else:
             print("CREATE A CONNECTION TO DATABASE!")
-            return []
+            return QueryResult(['None'])
 
     def _execute_query(self, query: str, query_type: str = 'QUERY'):
         if self.__is_connected:
