@@ -1,8 +1,7 @@
-from connection.database import DatabaseConnection
+import unittest
+
 from connection.configuration import ConnectionConfiguration
 from connection.query import QueryResult
-
-import unittest
 
 
 class ConnectionTests(unittest.TestCase):

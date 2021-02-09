@@ -3,7 +3,7 @@ import fields.field as field
 import fields.storetype as storetype
 import fields.relationship as rel
 from connection.configuration import ConnectionConfiguration
-from manager import Manager
+from manager.manager import Manager
 
 ############################################################################################
 
