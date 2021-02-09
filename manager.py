@@ -642,7 +642,7 @@ class Manager(metaclass=SingletonMeta):
 
     def _find_type_of_primary_key_of_relation(self, table_name):
         # we need to find a primary key of the table to which relationship is
-        # in order to find the type of the field
+        # in order to find the type of the relation field
         entity = self.__class_names.get(table_name)
         table_name = self._get_table_name(entity)
         primary_key = self._find_primary_key_of_table(table_name)
