@@ -3,6 +3,7 @@ from psycopg2.extras import RealDictCursor
 from .configuration import ConnectionConfiguration
 from .query import QueryResult
 
+
 class DatabaseConnection:
 
     def __init__(self):

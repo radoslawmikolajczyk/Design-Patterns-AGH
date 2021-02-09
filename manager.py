@@ -35,21 +35,47 @@ class Manager(metaclass=SingletonMeta):
         self.__is_connected = False
         self.__database_connection = DatabaseConnection()
         # get all table names from all classes which inherit from Entity
-        self.__all_data, self.__class_names = self.__get_all_instances(Entity)
+        # __class_table_dict to slownik np. { <class '__main__.Address'> : _table_name, ... }
+        self.__all_data, self.__class_names, self.__class_table_dict = self.__get_all_instances(Entity)
         self.__junction_tables = []
         self.__junction_tables_names = []
         # self.__class_inheritance -- dict for all classes (without Entity) which inherit,
         # ex. { <class '__main__.Address'> : [<class '__main__.City'>, <class '__main__.Street'>]}
-        self.__class_inheritance = {}
+        self.__class_inheritance = self.__get_all_inheritances(self.__class_names.values())
+        self.__inherit_pk_all_data_modification()
+        # print(self.__all_data)
+        # print(self.__class_names)
+        # print(self.__class_table_dict)
+        # print(self.__junction_tables)
+        # print(self.__junction_tables_names)
+        # print(self.__class_inheritance)
+
+    def __inherit_pk_all_data_modification(self):
+        for i in range(len(self.__all_data)):
+            name = list(self.__all_data.keys())[i]
+            inherit = self.__get_table_name_by_class(self.__class_table_dict, name) in self.__class_inheritance
+            if inherit:
+                class_key = self.__get_table_name_by_class(self.__class_table_dict, name)
+                inherited_classes = self.__class_inheritance[class_key]
+                base_tab_name = self.__class_table_dict[inherited_classes[0]]
+                pk = self._find_primary_key_of_table(base_tab_name)
+                primary_key_value = self.__all_data[base_tab_name][pk[0]]
+
+                new_dict = dict()
+                new_dict[pk[0]] = primary_key_value
+                for k, v in self.__all_data[name].items():
+                    if not isinstance(v, PrimaryKey):
+                        new_dict[k] = v
+                self.__all_data[name] = new_dict
 
     # create table for a given class
     def create_table(self, entity: Entity):
         table_name = self._get_table_name(entity)
         values_from_all_data = self.__all_data[table_name]
         data = {table_name: values_from_all_data}
-        self._create_tables_mapper(data)
+        self.__create_tables_mapper(data)
 
-    def _create_tables_mapper(self, data):
+    def __create_tables_mapper(self, data):
         if self.__is_connected:
             for i in range(len(data)):
                 builder = ddl.DDLBuilder()
@@ -86,15 +112,17 @@ class Manager(metaclass=SingletonMeta):
                 self.__database_connection.commit(builder.build(), 'CREATE TABLE')
             for build in self.__junction_tables:
                 self.__database_connection.commit(build, 'CREATE JUNCTION TABLE')
-            print(self.__all_data)
-            print(self.__class_names)
-            print(self.__junction_tables)
-            print(self.__junction_tables_names)
         else:
             print("CREATE A CONNECTION TO DATABASE!")
 
     def create_tables(self):
-        self._create_tables_mapper(self.__all_data)
+        self.__create_tables_mapper(self.__all_data)
+
+    def __get_table_name_by_class(self, dictionary, table_name):
+        items_list = dictionary.items()
+        for item in items_list:
+            if item[1] == table_name:
+                return item[0]
 
     # OneToOne and OneToMany relations
     def __get_o_relation(self, entity_name):
@@ -172,19 +200,25 @@ class Manager(metaclass=SingletonMeta):
                     first_fk_name = self._find_name_of_first_fk_column(class_name, second_table_name)
 
                     second_fk_field_name, _, second_fk_type = second_fk
-                    second_fk_values = getattr(entity, field_name)
+                    second_fk_objects = getattr(entity, field_name)
+                    second_fk_values = self._find_foreign_key_values_in_m2m(second_fk_objects, second_fk_field_name)
                     second_fk_name = self.__get_column_name(field_object, field_name)
 
                     junction_table_name = self._find_name_of_junction_table(table_name, second_table_name)
 
-                    if not isinstance(second_fk_values, ManyToMany):
-                        for second_value in second_fk_values:
-                            builder = InsertBuilder().into(junction_table_name)
-                            builder.add(first_fk_name, first_fk_type, first_fk_value)
-                            builder.add(second_fk_name, second_fk_type, second_value)
-                            self._execute_query(builder.build(), 'INSERT')
+                    for second_value in second_fk_values:
+                        builder = InsertBuilder().into(junction_table_name)
+                        builder.add(first_fk_name, first_fk_type, first_fk_value)
+                        builder.add(second_fk_name, second_fk_type, second_value)
+                        self._execute_query(builder.build(), 'INSERT')
 
-                    break
+    def _find_foreign_key_values_in_m2m(self, objects, fk_field_name):
+        second_fk_values = []
+        if not isinstance(objects, ManyToMany):
+            for relation_object in objects:
+                value = getattr(relation_object, fk_field_name)
+                second_fk_values.append(value)
+        return second_fk_values
 
     def _find_name_of_first_fk_column(self, class_name, second_table_name):
         first_fk_name = None
@@ -205,8 +239,18 @@ class Manager(metaclass=SingletonMeta):
 
     def _execute_sql_function(self, entity: Entity, query_type: str):
         table_name = self._get_table_name(entity)
+        has_inheritance = self.__get_table_name_by_class(self.__class_table_dict, table_name) in self.__class_inheritance
+        tables = [table_name]
 
-        primary_key = self._find_primary_key_of_table(table_name)
+        if has_inheritance:
+            inherited_classes = self.__class_inheritance[entity.__class__]
+            for iclass in inherited_classes:
+                tables.append(self.__class_table_dict[iclass])
+            base_class_table_name = self.__class_table_dict[inherited_classes[0]]
+            primary_key = self._find_primary_key_of_table(base_class_table_name)
+        else:
+            primary_key = self._find_primary_key_of_table(table_name)
+
         assert primary_key is not None
         primary_key_field_name, primary_key_name, primary_key_type = primary_key
         primary_key_value = getattr(entity, primary_key_field_name)
@@ -215,32 +259,37 @@ class Manager(metaclass=SingletonMeta):
 
         builder = None
 
-        if query_type is 'INSERT':
-            builder = InsertBuilder().into(table_name)
-        elif query_type is 'UPDATE':
-            builder = UpdateBuilder().table(table_name)
-        elif query_type is 'DELETE':
-            builder = DeleteBuilder().table(table_name)
+        for table_name in tables:
 
-        assert builder is not None
+            if query_type is 'INSERT':
+                builder = InsertBuilder().into(table_name)
+            elif query_type is 'UPDATE':
+                builder = UpdateBuilder().table(table_name)
+            elif query_type is 'DELETE':
+                builder = DeleteBuilder().table(table_name)
 
-        if query_type in ('INSERT', 'UPDATE'):
-            types, names = self._find_names_and_types_of_columns(table_name)
-            for field_name in types.keys():
-                store_type = types[field_name]
-                column_name = names[field_name]
-                value = getattr(entity, field_name)
+            assert builder is not None
 
-                # case for values that are not already assigned (NULL)
-                if not isinstance(value, Column) and \
-                        not isinstance(value, PrimaryKey) and \
-                        not isinstance(value, Relationship):
-                    builder.add(column_name, store_type, value)
+            if query_type in ('INSERT', 'UPDATE'):
+                    types, names, values = self._find_names_types_values_of_column(table_name, entity)
+                    for field_name in types.keys():
+                        store_type = types[field_name]
+                        column_name = names[field_name]
+                        value = values[field_name]
 
-        if query_type in ('UPDATE', 'DELETE'):
-            builder.where(primary_key_name, primary_key_type, primary_key_saved_value)
+                        # case for values that are not already assigned (NULL) or are assigned with None
+                        if not isinstance(value, Column) and \
+                                not isinstance(value, PrimaryKey) and \
+                                not isinstance(value, Relationship) and \
+                                value is not None:
+                            builder.add(column_name, store_type, value)
 
-        self._execute_query(builder.build(), query_type)
+            if query_type in ('UPDATE', 'DELETE'):
+                # print(type(primary_key_name), type(primary_key_type), type(primary_key_saved_value))
+                builder.where(primary_key_name, primary_key_type, primary_key_saved_value)
+
+            self._execute_query(builder.build(), query_type)
+            builder = None
 
     def insert(self, entity: Entity):
         self._execute_sql_function(entity, 'INSERT')
@@ -262,7 +311,8 @@ class Manager(metaclass=SingletonMeta):
 
     def find_by(self, model: Entity, key_name: str, key_value, many_keys=False):
         table_name = self._get_table_name(model)
-        types, names = self._find_names_and_types_of_columns(table_name)
+
+        types, names, _ = self._find_names_and_types_of_columns(table_nam, None)
         builder = self.__build_regular(table_name, types, names, key_name, key_value)
 
         junction_data = None
@@ -279,6 +329,7 @@ class Manager(metaclass=SingletonMeta):
         return False
 
     def __build_regular(self, table_name, types, names, key_name, key_value):
+
         builder = SelectBuilder().table(table_name)
         for field_name in types.keys():
             builder.add(table_name, names[field_name])
@@ -320,7 +371,7 @@ class Manager(metaclass=SingletonMeta):
     def select(self, model: Entity, query: str, many_keys=False, junction_data=None) -> list:
         if self.__is_connected:
             table_name = self._get_table_name(model)
-            _, names = self._find_names_and_types_of_columns(table_name)
+            _, names, _ = self._find_names_and_types_of_columns(table_name, None)
             query_result = self.select_raw(query)
             result = self.__map_result_fields(model, names, query_result, many_keys, junction_data)
             return result
@@ -463,6 +514,7 @@ class Manager(metaclass=SingletonMeta):
         cls = self.__all_subclasses(cls)
         tables = dict()
         class_names = dict()
+        class_tables = dict()
         for subclass in cls:
 
             values = subclass.__dict__
@@ -481,7 +533,8 @@ class Manager(metaclass=SingletonMeta):
 
             tables[t_name] = new_dict
             class_names[subclass.__name__] = subclass
-        return tables, class_names
+            class_tables[subclass] = t_name
+        return tables, class_names, class_tables
 
     def _get_table_name(self, entity: Entity):
         if entity._table_name is not "":
@@ -492,21 +545,32 @@ class Manager(metaclass=SingletonMeta):
             table_name = entity.__name__.lower()
         return table_name
 
-    def _find_names_and_types_of_columns(self, table_name):
+    def _find_names_types_values_of_column(self, table_name, entity):
         fields = self.__all_data[table_name].items()
         types = dict()  # [field_name : column_type]
         names = dict()  # [field_name : column_name]
+        values = dict() # [field_name : value]
 
         for field_name, field_object in fields:
             if isinstance(field_object, Column) or isinstance(field_object, PrimaryKey):
                 types[field_name] = field_object.type
+                if entity is not None:
+                    values[field_name] = getattr(entity, field_name)
             elif isinstance(field_object, ManyToOne) or isinstance(field_object, OneToOne):
-                primary_key_type = self._find_type_of_primary_key_of_relation(field_object.other)
+                primary_key = self._find_type_of_primary_key_of_relation(field_object.other)
+                assert primary_key is not None
+                primary_key_field_name, primary_key_name, primary_key_type = primary_key
                 types[field_name] = primary_key_type
+                if entity is not None:
+                    relation_object = getattr(entity, field_name)
+                    if not isinstance(relation_object, Relationship):
+                        values[field_name] = getattr(relation_object, primary_key_field_name)
+                    else:
+                        values[field_name] = None
 
             names[field_name] = self.__get_column_name(field_object, field_name)
 
-        return types, names
+        return types, names, values
 
     def _find_primary_key_of_table(self, table_name):
         fields = self.__all_data[table_name].items()
@@ -533,8 +597,8 @@ class Manager(metaclass=SingletonMeta):
         table_name = self._get_table_name(entity)
         primary_key = self._find_primary_key_of_table(table_name)
         assert primary_key is not None
-        _, _, primary_key_type = primary_key
-        return primary_key_type
+        primary_key_field_name, primary_key_name, primary_key_type = primary_key
+        return primary_key_field_name, primary_key_name, primary_key_type
 
     def _execute_query(self, query: str, query_type: str = 'QUERY'):
         if self.__is_connected:
@@ -542,67 +606,45 @@ class Manager(metaclass=SingletonMeta):
         else:
             print("CREATE A CONNECTION TO DATABASE!")
 
-    def _has_inheritance(self, cls):
-        inheritance_list = []
-        for key, value in self.__class_names.items():
-            if isinstance(cls, value) and value != type(cls):
-                inheritance_list.append(value)
-        if len(inheritance_list) > 0:
-            self.__class_inheritance[type(cls)] = inheritance_list
-            return True
-        return False
+    def __get_all_inheritances(self, classes):
+        inheritance_dictionary = dict()
+        for base_class in classes:
+            val = []
+            for subclass in classes:
+                if issubclass(base_class, subclass) and base_class != subclass:
+                    val.append(subclass)
+            if val:
+                inheritance_dictionary[base_class] = val
+        return inheritance_dictionary
 
-    '''
-        Do funkcji przekazujemy obiekt i robimy skan po wszystkich co dziedziczy (jesli dziedziczy ofc), 
-        funkcja zwraca nam slownik (jesli dane entity dziedziczy po czyms, inaczej zwraca None) w formacie:
-        { nazwa_tabeli_rodzic1 : { nazwa_kolumny: wartosc_wprowadzona_przez_uzytk }, nazwa_tabeli_rodzic2 : {...}, nazwa_tabeli_dziecko: {} }
-        Mozna ten slownik juz bezposrednio obsluzyc w operacjach ddl,
-    '''
-    def _get_inheritance_data(self, cls):
-        if self._has_inheritance(cls):
-            # pobieramy wszystkie wartosci z obiektu (w tym tez te z klas parent)
-            all_values = [i for i in dir(cls) if
+    def __split_inheritance_data(self, entity):
+        if type(entity) in self.__class_inheritance:
+            all_values = [i for i in dir(entity) if
                           not i.startswith('__') and not i.endswith('__') and i not in dir(Entity)]
-            # sprawdzamy czy wartosci sa typu Field, jesli sa to skip. Bierzemy tylko to co jest uzywane
-            all_values = [i for i in all_values if not isinstance(getattr(cls, i), Field)]
+            all_values = [i for i in all_values if not isinstance(getattr(entity, i), Field)]
 
-            # wartosci to slownik, w formacie { nazwa_tabeli: {nazwa_pola : wartosc(JUZ NIE COLUMN, tylko np
-            # string), itd..}}
-            grouped_values = self._find_parent_values(all_values, cls)
-            own_values = {}
-
-            print(all_values)
-            table_name = self._get_table_name(cls)
-            for k, v in self.__all_data[table_name].items():
-                if k in all_values:
-                    own_values[self.__get_column_name(v, k)] = getattr(cls, k)
-
-            grouped_values[table_name] = own_values
-
+            grouped_values = self.__group_inheritance_values(all_values, entity)
             return grouped_values
         return None
 
-    def _find_parent_values(self, array, cls):
-        parent_classes = self.__class_inheritance.get(type(cls))
-        parent_objects = []
-        for i in range(len(parent_classes)):
-            parent_objects.append(parent_classes[i]())
-        table_names = []
-        for i in range(len(parent_objects)):
-            table_names.append(self._get_table_name(parent_objects[i]))
+    def __group_inheritance_values(self, values, entity):
+        grouped_values = dict()
+        inherit_from = self.__class_inheritance.get(type(entity))
 
-        values_from_all_data = {}
-        parent_dictionary = {}
-        for i in range(len(table_names)):
-            new_dict = {}
-            values_from_all_data[table_names[i]] = self.__all_data[table_names[i]]
-            parent_dictionary[table_names[i]] = new_dict
+        for i in range(len(inherit_from)):
+            val = {}
+            actual_table = self.__class_table_dict.get(inherit_from[i])
+            for j in values:
+                if j in inherit_from[i].__dict__:
+                    val[j] = getattr(entity, j)
+                if j in self.__all_data[actual_table] and j not in val:
+                    val[j] = getattr(entity, j)
+            grouped_values[actual_table] = val
+        child_table_name = self._get_table_name(entity)
+        child_values = {}
+        for k, v in self.__all_data[child_table_name].items():
+            if k in values:
+                child_values[k] = getattr(entity, k)
+        grouped_values[child_table_name] = child_values
 
-            for k, v in values_from_all_data[table_names[i]].items():
-                if k in array:
-                    var = getattr(cls, array[array.index(k)])
-                    if var:
-                        new_dict[self.__get_column_name(v, k)] = var
-
-        del parent_objects
-        return parent_dictionary
+        return grouped_values
