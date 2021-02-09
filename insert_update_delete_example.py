@@ -129,16 +129,10 @@ m.update(p)
 
 to_update = Person()
 to_update = m.find_by_id(to_update, "changedFK")
-m.insert(to_update)
+print("\nFound record:", to_update._first_name, to_update._second_name, "\n")
+
 to_update._second_name = "From findby"
 m.update(to_update)
-
-selected = m.select(Address(), "SELECT * FROM address")
-print("\nSelect found: ", selected)
-
-for i in selected:
-    print("Address id:", i.id, "; It's an address of person with first name:", i.person_fk)
-print("\n")
 
 m.delete(a1)
 m.delete(a2)
@@ -214,25 +208,25 @@ b2.author_fk = [a1]
 
 p1.id = 1
 p1.title = "ptitle1"
-p1.author_fk = [a1, a2]
+p1.author_fk = [a1]
 
 p2.id = 2
 p2.title = "ptitle2"
-p2.author_fk = [a1, a2]
+p2.author_fk = [a1]
 
 a1.id = 1
 a1.name = "name1"
 a1.book_fk = [b1, b2]
 a1.poem_fk = [p1, p2]
 
-a2.id = 2
-a2.name = "name2"
-a2.poem_fk = [p1, p2]
+m.multi_insert([b1, b2, a1, p1, p2])
 
-m.multi_insert([b1, b2, a1, a2, p1, p2])
+lookup_list = m.find_by(Author(), 'name', 'name1')
+print("\nFind by returned a list:", lookup_list)
+lookup = lookup_list[0]
+print("\nFound record:", lookup.id, lookup.name, "Related books:", lookup.book_fk[0].title, lookup.book_fk[1].title, "Related poems:", lookup.poem_fk[0].title, lookup.poem_fk[1].title, "\n")
 
 m.delete(a1)
-m.delete(a2)
 m.delete(b1)
 m.delete(b2)
 m.delete(p1)

@@ -1,4 +1,3 @@
-from copy import deepcopy
 from typing import List
 
 import builders.ddl as ddl
@@ -9,13 +8,10 @@ from builders.select import SelectBuilder
 from builders.update import UpdateBuilder
 from connection.configuration import ConnectionConfiguration
 from connection.database import DatabaseConnection
-from connection.query import QueryResult
 from entity.entity import Entity
 from fields.field import Column, PrimaryKey
 from fields.relationship import OneToOne, ManyToOne, ManyToMany, Relationship
-from manager.manager_helper_functions import find_name_of_first_fk_column, get_column_name, \
-    find_foreign_key_values_in_m2m, \
-    get_table_name, find_primary_key_of_table, get_all_inheritances, get_key_by_value
+from manager.manager_helper_functions import *
 from manager.scanner import Scanner
 from manager.table_mapper import TableMapper
 
@@ -39,7 +35,7 @@ class Manager(metaclass=SingletonMeta):
         # get all table names from all classes which inherit from Entity
         # __class_table_dict to slownik np. { <class '__main__.Address'> : _table_name, ... }
         self.__all_data, self.__class_names, self.__class_table_dict = self.__scanner.get_all_instances(Entity)
-        self.__table_mapper = TableMapper(self.__class_names, self.__all_data)
+        self.__table_mapper = TableMapper(self.__class_names, self.__all_data, self)
         self.__junction_tables = []
         self.__junction_tables_names = []
         # self.__class_inheritance -- dict for all classes (without Entity) which inherit,
@@ -54,13 +50,6 @@ class Manager(metaclass=SingletonMeta):
         self.__create_table = 'CREATE TABLE'
         self.__create_junction = 'CREATE JUNCTION TABLE'
         self.__not_connected_error = 'CREATE A CONNECTION TO DATABASE!'
-
-        # print(self.__all_data)
-        # print(self.__class_names)
-        # print(self.__class_table_dict)
-        # print(self.__junction_tables)
-        # print(self.__junction_tables_names)
-        # print(self.__class_inheritance)
 
     def __inherit_pk_all_data_modification(self):
         for i in range(len(self.__all_data)):
@@ -197,7 +186,7 @@ class Manager(metaclass=SingletonMeta):
             assert builder is not None
 
             if query_type in (self.__insert_query, self.__update_query):
-                types, names, values = self._find_names_types_values_of_column(table_name, entity)
+                types, names, values = find_names_types_values_of_column(table_name, entity, self.__all_data, self.__class_names)
                 for field_name in types.keys():
                     store_type = types[field_name]
                     column_name = names[field_name]
@@ -214,6 +203,22 @@ class Manager(metaclass=SingletonMeta):
                 builder.where(primary_key_name, primary_key_type, primary_key_saved_value)
 
             self._execute_query(builder.build(), query_type)
+
+    def _get_tables_and_primary_key_of_entity(self, entity: Entity):
+        table_name = get_table_name(entity)
+        has_inheritance = get_key_by_value(self.__class_table_dict, table_name) in self.__class_inheritance
+        tables = [table_name]
+
+        if has_inheritance:
+            inherited_classes = self.__class_inheritance[entity.__class__]
+            for iclass in inherited_classes:
+                tables.append(self.__class_table_dict[iclass])
+            base_class_table_name = self.__class_table_dict[inherited_classes[0]]
+            primary_key = find_primary_key_of_table(self.__all_data, base_class_table_name)
+        else:
+            primary_key = find_primary_key_of_table(self.__all_data, table_name)
+
+        return tables, primary_key
 
     def multi_insert(self, entities: List[Entity]):
         for entity in entities:
@@ -249,6 +254,13 @@ class Manager(metaclass=SingletonMeta):
                         builder.add(second_fk_name, second_fk_type, second_value)
                         self._execute_query(builder.build(), self.__insert_query)
 
+    def _find_name_of_junction_table(self, first: str, second: str):
+        junction_table_name = first + self.__join_char + second
+        if junction_table_name not in self.__junction_tables_names:
+            junction_table_name = second + self.__join_char + first
+
+        return junction_table_name
+
     def find_by_id(self, model: Entity, id, many_keys=False):
         table_name = get_table_name(model)
         id_field_name, _, _ = find_primary_key_of_table(self.__all_data, table_name)
@@ -260,11 +272,11 @@ class Manager(metaclass=SingletonMeta):
 
     def find_by(self, model: Entity, key_name: str, key_value, many_keys=False):
         table_name = get_table_name(model)
-        types, names, _ = self._find_names_types_values_of_column(table_name, None)
+        types, names, _ = find_names_types_values_of_column(table_name, None, self.__all_data, self.__class_names)
         builder = self.__build_regular(table_name, types, names, key_name, key_value)
 
         junction_data = None
-        if self.__check_got_many_relation(table_name):
+        if check_got_many_relation(table_name, self.__junction_tables_names):
             junction_data = self.__build_many_relation(table_name, builder)
 
         model_inherits = (type(model) in self.__class_inheritance.keys())
@@ -272,13 +284,7 @@ class Manager(metaclass=SingletonMeta):
             self.__build_inheritance(model, builder)
 
         query, fields = builder.build()
-        return self.select(model, query, many_keys, junction_data)
-
-    def __check_got_many_relation(self, table_name):
-        for junction_name in self.__junction_tables_names:
-            if table_name in junction_name:
-                return True
-        return False
+        return self.__select(model, query, many_keys, junction_data)
 
     def __build_regular(self, table_name, types, names, key_name, key_value):
         builder = SelectBuilder().table(table_name)
@@ -288,8 +294,8 @@ class Manager(metaclass=SingletonMeta):
         return builder
 
     def __build_many_relation(self, table_name, builder):
-        junction_data = self._get_junction_data(table_name)
-        other = self.__find_many_to_many_other_field(table_name)
+        junction_data = extract_junction_data(table_name, self.__junction_tables_names, self.__junction_tables)
+        other = find_many_to_many_other_field(table_name, self.__all_data)
         _, key_name, _ = find_primary_key_of_table(self.__all_data, table_name)
 
         for index, data in enumerate(junction_data):
@@ -298,34 +304,6 @@ class Manager(metaclass=SingletonMeta):
 
             builder.add(junction_table_name, other[index].name)
         return junction_data
-
-    def _get_junction_data(self, table_name: str):
-        junction_data = []
-        for index, junction_table_name in enumerate(self.__junction_tables_names):
-            if table_name in junction_table_name:
-                junction_query = self.__junction_tables[index]
-                junction_query = junction_query.split(" ")
-                for part_index, part in enumerate(junction_query):
-                    if 'KEY' in part and table_name in junction_query[part_index + 2]:
-                        junction_key = part.split('"')[1]
-                    elif 'KEY' in part and table_name not in junction_query[part_index + 2]:
-                        other_junction_key = part.split('"')[1]
-                junction_data.append((junction_table_name, junction_key, other_junction_key))
-        return junction_data
-
-    def _find_name_of_junction_table(self, first: str, second: str):
-        junction_table_name = first + self.__join_char + second
-        if junction_table_name not in self.__junction_tables_names:
-            junction_table_name = second + self.__join_char + first
-
-        return junction_table_name
-
-    def __find_many_to_many_other_field(self, table_name):
-        names = []
-        for key, value in self.__all_data[table_name].items():
-            if isinstance(value, ManyToMany):
-                names.append(value)
-        return names
 
     def __build_inheritance(self, model, builder):
         parents = self.__class_inheritance[type(model)]
@@ -339,224 +317,29 @@ class Manager(metaclass=SingletonMeta):
             self.__add_parent_columns(builder, parent_name, model_pk)
 
     def __add_parent_columns(self, builder, table_name, child_pk_name):
-        _, names, _ = self._find_names_types_values_of_column(table_name, None)
+        _, names, _ = find_names_types_values_of_column(table_name, None, self.__all_data, self.__class_names)
         for name in names.values():
             if name != child_pk_name:
                 builder.add(table_name, name)
 
-    def select(self, model: Entity, query: str, many_keys=False, junction_data=None) -> list:
+    def __select(self, model: Entity, query: str, many_keys=False, junction_data=None) -> list:
         if self.__is_connected:
-            names = self.__get_field_names_dict(model)
-            query_result = self.select_raw(query)
-            result = self.__map_result_fields(model, names, query_result, many_keys, junction_data)
+            names = get_field_names_dict(model, self.__all_data, self.__class_names, self.__class_inheritance)
+            query_result = self.__select_raw(query)
+            self.__table_mapper.inheritance = self.__class_inheritance
+            result = self.__table_mapper.map_result_fields(model, names, query_result, many_keys, junction_data)
             return result
         else:
             print("CREATE A CONNECTION TO DATABASE!")
             return []
 
-    def __get_field_names_dict(self, model):
-        table_name = get_table_name(model)
-        _, names, _ = self._find_names_types_values_of_column(table_name, None)
-        model_inherits = (type(model) in self.__class_inheritance.keys())
-        if model_inherits:
-            self.__add_parent_fields(model, names)
-        return names
-
-    def __add_parent_fields(self, model, child_names):
-        parents = self.__class_inheritance[type(model)]
-        table_name = get_table_name(model)
-        _, model_pk, _ = find_primary_key_of_table(self.__all_data, table_name)
-
-        for parent_class in parents:
-            parent_name = get_table_name(parent_class)
-            _, names, _ = self._find_names_types_values_of_column(parent_name, None)
-            for key, value in names.items():
-                if key not in child_names.keys():
-                    child_names[key] = value
-
-    def select_raw(self, query: str) -> list:
+    def __select_raw(self, query: str) -> list:
         if self.__is_connected:
             query_result = self.__database_connection.execute(query)
             return query_result
         else:
             print("CREATE A CONNECTION TO DATABASE!")
             return []
-
-    def __map_result_fields(self, model: Entity, fields_columns_map, query_result: QueryResult, many_keys=False,
-                            junction_data=None):
-        table_name = get_table_name(model)
-        _, pk_column_name, _ = find_primary_key_of_table(self.__all_data, table_name)
-        fetched = query_result.get_query()
-        result = self.__prepare_select_result(model, pk_column_name, fetched)
-        for row in fetched:
-            primary_key = row[pk_column_name]
-            obj = result[primary_key]
-            for key, value in fields_columns_map.items():
-                field_type = getattr(model, key)
-                if isinstance(field_type, OneToOne) or isinstance(field_type, ManyToOne):
-                    other = self.find_by_id(self.__class_names[field_type.other], row[value])
-                    setattr(obj, key, other)
-                elif isinstance(field_type, ManyToMany):
-                    self.__map_many_keys(obj, key, row[value])
-                else:
-                    setattr(obj, key, row[value])
-            result[primary_key] = obj
-
-        if not many_keys:
-            for obj in list(result.values()):
-                self.__map_many_objects(obj, junction_data, model, fields_columns_map)
-
-        return list(result.values())
-
-    def __prepare_select_result(self, model: Entity, pk_column_name, fetched_values):
-        result = {}
-        for row in fetched_values:
-            obj = deepcopy(model)
-            primary_key = row[pk_column_name]
-            obj._primary_key = primary_key
-            result[primary_key] = obj
-        return result
-
-    def __map_many_keys(self, obj, key, value):
-        obj_field = getattr(obj, key)
-        if isinstance(obj_field, list):
-            new = obj_field.copy()
-            new.append(value)
-            setattr(obj, key, new)
-        else:
-            setattr(obj, key, [value])
-
-    def __map_many_objects(self, obj, junction_data, model, fields_columns_map):
-        table_name = get_table_name(model)
-        primary_key = self.__get_object_pk(obj, model)
-        for key, value in fields_columns_map.items():
-            field_type = getattr(model, key)
-            if not isinstance(field_type, ManyToMany):
-                continue
-
-            this_mapped, other_mapped, other_junction_key = self.__map_related_objects(obj, model, key, junction_data)
-            self.__link_relation_objects(this_mapped, other_mapped, key, other_junction_key)
-
-    def __get_object_pk(self, obj, model):
-        table_name = get_table_name(model)
-        pk_field_name, _, _ = find_primary_key_of_table(self.__all_data, table_name)
-        primary_key = getattr(obj, pk_field_name)
-        return primary_key
-
-    def __map_related_objects(self, obj, model, key, junction_data):
-        table_name = get_table_name(model)
-        primary_key = self.__get_object_pk(obj, model)
-
-        field_type = getattr(model, key)
-        this_stack = []
-        other_stack = getattr(obj, key).copy()
-        this_mapped = {primary_key: obj}
-        other_mapped = {}
-        mapping = "other"
-        other_class = self.__class_names[field_type.other]()
-        other_junction_col = self.__extract_other_junction_key(junction_data, table_name, get_table_name(
-            self.__class_names[field_type.other]))
-        other_junction_key = self.__get_field_name(other_class, other_junction_col)
-
-        while len(this_stack + other_stack) != 0:
-            if mapping == "other" or len(this_stack) == 0:
-                rel_key = other_stack.pop()
-                rel_obj = self.find_by_id(other_class, rel_key, True)
-                other_mapped[rel_key] = rel_obj
-                for i in getattr(rel_obj, other_junction_key):
-                    if i not in this_mapped.keys():
-                        this_stack.append(i)
-                mapping = "this"
-
-            elif mapping == "this" or len(other_stack) == 0:
-                rel_key = this_stack.pop()
-                rel_obj = self.find_by_id(model, rel_key, True)
-                this_mapped[rel_key] = rel_obj
-                for i in getattr(rel_obj, key):
-                    if i not in other_mapped.keys():
-                        other_stack.append(i)
-                mapping = "other"
-
-        return this_mapped, other_mapped, other_junction_key
-
-    def __extract_other_junction_key(self, junction_data, table_name, other_name):
-        for dataset in junction_data:
-            junction_name = dataset[0]
-            if table_name in junction_name and other_name in junction_name:
-                return dataset[1]
-
-    def __get_field_name(self, model, search_column):
-        names = self.__get_field_names_dict(model)
-        for field_name, column_name in names.items():
-            if column_name == search_column:
-                return field_name
-
-    def __link_relation_objects(self, left, right, left_key, right_key):
-        for mapped in left.values():
-            new_val = []
-            for i in getattr(mapped, left_key):
-                new_val.append(right[i])
-            setattr(mapped, left_key, list(set(new_val)))
-
-        for mapped in right.values():
-            new_val = []
-            for i in getattr(mapped, right_key):
-                new_val.append(left[i])
-            setattr(mapped, right_key, list(set(new_val)))
-
-    def _find_names_types_values_of_column(self, table_name, entity):
-        fields = self.__all_data[table_name].items()
-        types = dict()  # [field_name : column_type]
-        names = dict()  # [field_name : column_name]
-        values = dict()  # [field_name : value]
-
-        for field_name, field_object in fields:
-            if isinstance(field_object, Column) or isinstance(field_object, PrimaryKey):
-                types[field_name] = field_object.type
-                if entity is not None:
-                    values[field_name] = getattr(entity, field_name)
-            elif isinstance(field_object, ManyToOne) or isinstance(field_object, OneToOne):
-                primary_key = self._find_type_of_primary_key_of_relation(field_object.other)
-                assert primary_key is not None
-                primary_key_field_name, primary_key_name, primary_key_type = primary_key
-                types[field_name] = primary_key_type
-                if entity is not None:
-                    relation_object = getattr(entity, field_name)
-                    if not isinstance(relation_object, Relationship):
-                        values[field_name] = getattr(relation_object, primary_key_field_name)
-                    else:
-                        values[field_name] = None
-
-            names[field_name] = get_column_name(field_object, field_name)
-
-        return types, names, values
-
-    def _get_tables_and_primary_key_of_entity(self, entity: Entity):
-        table_name = get_table_name(entity)
-        has_inheritance = get_key_by_value(self.__class_table_dict,
-                                           table_name) in self.__class_inheritance
-        tables = [table_name]
-
-        if has_inheritance:
-            inherited_classes = self.__class_inheritance[entity.__class__]
-            for iclass in inherited_classes:
-                tables.append(self.__class_table_dict[iclass])
-            base_class_table_name = self.__class_table_dict[inherited_classes[0]]
-            primary_key = find_primary_key_of_table(self.__all_data, base_class_table_name)
-        else:
-            primary_key = find_primary_key_of_table(self.__all_data, table_name)
-
-        return tables, primary_key
-
-    def _find_type_of_primary_key_of_relation(self, table_name):
-        # we need to find a primary key of the table to which relationship is
-        # in order to find the type of the relation field
-        entity = self.__class_names.get(table_name)
-        table_name = get_table_name(entity)
-        primary_key = find_primary_key_of_table(self.__all_data, table_name)
-        assert primary_key is not None
-        primary_key_field_name, primary_key_name, primary_key_type = primary_key
-        return primary_key_field_name, primary_key_name, primary_key_type
 
     def _execute_query(self, query: str, query_type: str = 'QUERY'):
         if self.__is_connected:

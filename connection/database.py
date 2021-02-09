@@ -31,7 +31,6 @@ class DatabaseConnection:
             self.connection.commit()
             print(query_type, ' was successful: ', query)
         except Exception as error:
-            print(error)
             self.cursor.execute("ROLLBACK")
 
     def connect(self):
