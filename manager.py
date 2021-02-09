@@ -138,6 +138,7 @@ class Manager(metaclass=SingletonMeta):
     def __find_many_to_many_relation_value(self, table_name):
         for key, value in self.__all_data[table_name].items():
             if isinstance(value, ManyToMany):
+                value.name = self.__get_column_name(value, key)
                 return value
 
     def __get_column_name(self, field, field_name):
@@ -153,7 +154,6 @@ class Manager(metaclass=SingletonMeta):
         if table_name not in self.__junction_tables and reversed_name not in self.__junction_tables_names:
             first_fk = self._find_primary_key_of_table(first_table)
             second_fk = self._find_primary_key_of_table(second_table)
-
             builder = ddl.DDLBuilder()
             builder.name(table_name)
             builder.field(first_field_name.name, first_fk[2], False)
