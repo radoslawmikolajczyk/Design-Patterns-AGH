@@ -1,5 +1,5 @@
 from entity.entity import Entity
-from fields.field import Field
+from fields.field import Field, PrimaryKey, Column
 from fields.relationship import ManyToMany
 
 
@@ -38,3 +38,22 @@ def get_table_name(entity: Entity):
             entity = type(entity)
         table_name = entity.__name__.lower()
     return table_name
+
+
+def find_primary_key_of_table(all_data, table_name):
+    fields = all_data[table_name].items()
+
+    for field_name, field_object in fields:
+        if isinstance(field_object, PrimaryKey):
+            column_name = get_column_name(field_object, field_name)
+            primary_key = [field_name, column_name, field_object.type]
+            return primary_key
+
+    # if we don't find the primary key field, the primary key is the first column
+    for field_name, field_object in fields:
+        if isinstance(field_object, Column):
+            column_name = get_column_name(field_object, field_name)
+            primary_key = [field_name, column_name, field_object.type]
+            return primary_key
+
+    return None

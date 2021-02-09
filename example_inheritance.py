@@ -36,30 +36,30 @@ class Match(Entity):
     player_fk = rel.ManyToMany('Footballer', name='player')
 
 
-class Literature(Entity):  # multiple many to many relation + inheritance
-    id = field.PrimaryKey(storetype.Integer(), name='id')
-
-
-class Romance(Literature):  # multiple many to many relation + inheritance
-    title = field.Column(storetype.Text(max_length=30), name='title')
-    author_fk = rel.ManyToMany('Author', name='author_fk')
-
-
-class Fantasy(Literature):  # multiple many to many relation + inheritance
-    title = field.Column(storetype.Text(max_length=30), name='title')
-    author_fk = rel.ManyToMany('Author', name='author_fk')
-
-
-class Author(Entity):  # multiple many to many relation + inheritance
-    _table_name = 'autor'
-    id = field.PrimaryKey(storetype.Integer(), name='id')
-    romance_fk = rel.ManyToMany('Romance')
-    fantasy_fk = rel.ManyToMany('Fantasy')
-    birth_year = rel.ManyToOne('Birthday')
-
-
-class Birthday(Entity):
-    year = field.PrimaryKey(storetype.Integer(), name='id')
+# class Literature(Entity):  # multiple many to many relation + inheritance
+#     id = field.PrimaryKey(storetype.Integer(), name='id')
+#
+#
+# class Romance(Literature):  # multiple many to many relation + inheritance
+#     title = field.Column(storetype.Text(max_length=30), name='title')
+#     author_fk = rel.ManyToMany('Author', name='author_fk')
+#
+#
+# class Fantasy(Literature):  # multiple many to many relation + inheritance
+#     title = field.Column(storetype.Text(max_length=30), name='title')
+#     author_fk = rel.ManyToMany('Author', name='author_fk')
+#
+#
+# class Birthday(Entity):
+#     year = field.PrimaryKey(storetype.Integer(), name='id')
+#
+#
+# class Author(Entity):  # multiple many to many relation + inheritance
+#     _table_name = 'autor'
+#     id = field.PrimaryKey(storetype.Integer(), name='id')
+#     romance_fk = rel.ManyToMany('Romance')
+#     fantasy_fk = rel.ManyToMany('Fantasy')
+#     birth_year = rel.ManyToOne('Birthday')
 
 
 m = Manager()
@@ -117,54 +117,54 @@ m.delete(f2)
 m.delete(m1)
 m.delete(m2)
 
-# EXAMPLE 3 ######################## multiple many to many ############################################
-
-r1 = Romance()
-r2 = Romance()
-fa1 = Fantasy()
-fa2 = Fantasy()
-
-a1 = Author()
-a2 = Author()
-
-b = Birthday()
-
-r1.id = 1
-r1.title = 'title1'
-r1.author_fk = [a1, a2]
-
-r2.id = 2
-r2.title = 'title2'
-r2.author_fk = [a1]
-
-fa1.id = 1
-fa1.title = 'title1'
-fa1.author_fk = [a1, a2]
-
-fa2.id = 2
-fa2.title = 'title2'
-fa2.author_fk = [a1, a2]
-
-b.year = 1990
-
-a1.id = 1
-a1.romance_fk = [r1, r2]
-a1.fantasy_fk = [fa1, fa2]
-a1.birth_year = b
-
-a2.id = 1
-a2.romance_fk = [r2]
-a2.fantasy_fk = [fa1, fa2]
-a2.birth_year = b
-
-m.multi_insert([a1, a2, fa1, fa2, r1, r2, b])
-
-m.delete(a1)
-m.delete(a2)
-m.delete(fa1)
-m.delete(fa2)
-m.delete(r1)
-m.delete(r2)
-m.delete(b)
+# # EXAMPLE 3 ######################## multiple many to many ############################################
+#
+# r1 = Romance()
+# r2 = Romance()
+# fa1 = Fantasy()
+# fa2 = Fantasy()
+#
+# a1 = Author()
+# a2 = Author()
+#
+# b = Birthday()
+#
+# r1.id = 1
+# r1.title = 'title1'
+# r1.author_fk = [a1, a2]
+#
+# r2.id = 2
+# r2.title = 'title2'
+# r2.author_fk = [a1]
+#
+# fa1.id = 1
+# fa1.title = 'title1'
+# fa1.author_fk = [a1, a2]
+#
+# fa2.id = 2
+# fa2.title = 'title2'
+# fa2.author_fk = [a1, a2]
+#
+# b.year = 1990
+#
+# a1.id = 1
+# a1.romance_fk = [r1, r2]
+# a1.fantasy_fk = [fa1, fa2]
+# a1.birth_year = b
+#
+# a2.id = 1
+# a2.romance_fk = [r2]
+# a2.fantasy_fk = [fa1, fa2]
+# a2.birth_year = b
+#
+# m.multi_insert([a1, a2, fa1, fa2, r1, r2, b])
+#
+# m.delete(a1)
+# m.delete(a2)
+# m.delete(fa1)
+# m.delete(fa2)
+# m.delete(r1)
+# m.delete(r2)
+# m.delete(b)
 m.close()
 
